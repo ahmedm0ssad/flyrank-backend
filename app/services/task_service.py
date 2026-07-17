@@ -8,14 +8,36 @@ _tasks: dict[int, dict] = {}
 _next_id: int = 1
 
 
+def _seed():
+    global _next_id
+    now = datetime.now(timezone.utc)
+    examples = [
+        {"title": "Learn FastAPI", "done": False},
+        {"title": "Write tests", "done": False},
+        {"title": "Build a project", "done": False},
+    ]
+    for ex in examples:
+        task = {
+            "id": _next_id,
+            "title": ex["title"],
+            "done": ex["done"],
+            "created_at": now,
+            "updated_at": now,
+        }
+        _tasks[_next_id] = task
+        _next_id += 1
+
+
+_seed()
+
+
 def create_task(task_data: TaskCreate) -> TaskResponse:
     global _next_id
     now = datetime.now(timezone.utc)
     task = {
         "id": _next_id,
         "title": task_data.title,
-        "description": task_data.description,
-        "completed": task_data.completed,
+        "done": task_data.done,
         "created_at": now,
         "updated_at": now,
     }
@@ -41,8 +63,7 @@ def update_task(task_id: int, task_data: TaskUpdate) -> Optional[TaskResponse]:
         return None
     now = datetime.now(timezone.utc)
     task["title"] = task_data.title
-    task["description"] = task_data.description
-    task["completed"] = task_data.completed
+    task["done"] = task_data.done
     task["updated_at"] = now
     return TaskResponse(**task)
 

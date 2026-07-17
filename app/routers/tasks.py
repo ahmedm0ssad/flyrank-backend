@@ -17,7 +17,7 @@ def get_task(task_id: int):
     if task is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
+            detail=f"Task {task_id} not found",
         )
     return task
 
@@ -33,7 +33,7 @@ def update_task(task_id: int, task_data: TaskUpdate):
     if task is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
+            detail=f"Task {task_id} not found",
         )
     return task
 
@@ -44,6 +44,6 @@ def delete_task(task_id: int):
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
+            detail=f"Task {task_id} not found",
         )
     return None
