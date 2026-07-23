@@ -1,0 +1,223 @@
+from unittest.mock import MagicMock, patch
+
+import pytest
+import requests
+
+from app.scrapers.session import RobotsChecker, ScrapeSession, USER_AGENT, DEFAULT_DELAY
+
+
+class TestRobotsChecker:
+    def test_init(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        assert checker._base_url == "http://example.com"
+        assert checker._user_agent == "TestBot/1.0"
+        assert checker._disallowed_paths == []
+        assert checker._crawl_delay == 0
+        assert checker._loaded is False
+
+    def test_is_allowed_returns_true_before_load(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        assert checker.is_allowed("http://example.com/any") is True
+
+    def test_load_success(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        session = MagicMock()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "User-agent: *\nDisallow: /admin\nCrawl-delay: 2"
+        session.get.return_value = resp
+
+        checker.load(session)
+
+        assert checker._loaded is True
+        assert checker._disallowed_paths == ["/admin"]
+        assert checker._crawl_delay == 2.0
+
+    def test_load_no_robots(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        session = MagicMock()
+        resp = MagicMock()
+        resp.status_code = 404
+        session.get.return_value = resp
+
+        checker.load(session)
+
+        assert checker._loaded is True
+        assert checker._disallowed_paths == []
+
+    def test_load_failure(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        session = MagicMock()
+        session.get.side_effect = requests.RequestException("Connection error")
+
+        checker.load(session)
+
+        assert checker._loaded is True
+        assert checker._disallowed_paths == []
+
+    def test_is_allowed_blocked(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._disallowed_paths = ["/admin", "/private"]
+        checker._loaded = True
+
+        assert checker.is_allowed("http://example.com/admin") is False
+        assert checker.is_allowed("http://example.com/private/data") is False
+        assert checker.is_allowed("http://example.com/public") is True
+
+    def test_is_allowed_wildcard(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._disallowed_paths = ["/admin/*"]
+        checker._loaded = True
+
+        assert checker.is_allowed("http://example.com/admin/page") is False
+        assert checker.is_allowed("http://example.com/admin/") is False
+
+    def test_crawl_delay_property(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._crawl_delay = 5
+        assert checker.crawl_delay == 5.0
+
+    def test_crawl_delay_default(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        assert checker.crawl_delay == DEFAULT_DELAY
+
+    def test_parse_relevant_user_agent_star(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._parse("User-agent: *\nDisallow: /admin")
+        assert checker._disallowed_paths == ["/admin"]
+
+    def test_parse_relevant_user_agent_specific(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._parse("User-agent: TestBot\nDisallow: /api")
+        assert checker._disallowed_paths == ["/api"]
+
+    def test_parse_irrelevant_user_agent(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._parse("User-agent: GoogleBot\nDisallow: /api")
+        assert checker._disallowed_paths == []
+
+    def test_parse_invalid_crawl_delay(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._parse("User-agent: *\nCrawl-delay: not_a_number")
+        assert checker._crawl_delay == 0
+
+
+class TestScrapeSession:
+    def test_init_sets_default_delay(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com")
+            assert session._delay == DEFAULT_DELAY
+            session.close()
+
+    def test_init_uses_robots_crawl_delay(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            with patch(
+                "app.scrapers.session.RobotsChecker.crawl_delay",
+                new_callable=lambda: 5.0,
+            ):
+                session = ScrapeSession("http://example.com")
+                assert session._delay == 5.0
+                session.close()
+
+    def test_fetch_blocked_by_robots(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com")
+            session._robots.is_allowed = MagicMock(return_value=False)
+            result = session.fetch("http://example.com/admin")
+            assert result is None
+            session.close()
+
+    def test_fetch_success(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com")
+            session._robots.is_allowed = MagicMock(return_value=True)
+            mock_resp = MagicMock()
+            mock_resp.text = "<html>OK</html>"
+            session._session.get = MagicMock(return_value=mock_resp)
+
+            result = session.fetch("http://example.com/page")
+
+            assert result == "<html>OK</html>"
+            session._session.get.assert_called_once_with(
+                "http://example.com/page", timeout=10
+            )
+            session.close()
+
+    def test_fetch_http_error(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com")
+            session._robots.is_allowed = MagicMock(return_value=True)
+            session._session.get = MagicMock(
+                side_effect=requests.RequestException("HTTP Error")
+            )
+
+            result = session.fetch("http://example.com/page")
+
+            assert result is None
+            session.close()
+
+    def test_rate_limit_sleeps_when_needed(self, monkeypatch):
+        import time
+
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com", delay=2.0)
+            session._last_request_time = time.monotonic() - 0.5
+            session._robots.is_allowed = MagicMock(return_value=True)
+            mock_resp = MagicMock()
+            mock_resp.text = "OK"
+            session._session.get = MagicMock(return_value=mock_resp)
+
+            sleeps = []
+
+            def fake_sleep(secs):
+                sleeps.append(secs)
+
+            monkeypatch.setattr(time, "sleep", fake_sleep)
+
+            session.fetch("http://example.com/page")
+
+            assert len(sleeps) > 0
+            assert sleeps[0] > 0
+            session.close()
+
+    def test_rate_limit_does_not_sleep_when_not_needed(self, monkeypatch):
+        import time
+
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com", delay=2.0)
+            session._last_request_time = time.monotonic() - 5.0
+            session._robots.is_allowed = MagicMock(return_value=True)
+            mock_resp = MagicMock()
+            mock_resp.text = "OK"
+            session._session.get = MagicMock(return_value=mock_resp)
+
+            sleeps = []
+
+            def fake_sleep(secs):
+                sleeps.append(secs)
+
+            monkeypatch.setattr(time, "sleep", fake_sleep)
+
+            session.fetch("http://example.com/page")
+
+            assert len(sleeps) == 0
+            session.close()
+
+    def test_close_calls_session_close(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com")
+            session._session.close = MagicMock()
+            session.close()
+            session._session.close.assert_called_once()
+
+    def test_fetch_raises_for_status(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://example.com")
+            session._robots.is_allowed = MagicMock(return_value=True)
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.side_effect = requests.RequestException("HTTP Error")
+            session._session.get = MagicMock(return_value=mock_resp)
+
+            result = session.fetch("http://example.com/page")
+            assert result is None
+            session.close()
