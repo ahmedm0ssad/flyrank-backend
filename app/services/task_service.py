@@ -10,17 +10,19 @@ if is_postgres_enabled():
 
     _repo: TaskRepository = PostgresRepository()
 else:
-    from app.repositories.inmemory_repo import InMemoryRepository
+    from app.repositories.sqlite_repo import SqliteRepository
 
-    _repo: TaskRepository = InMemoryRepository()
+    _repo: TaskRepository = SqliteRepository()
 
 
 async def create_task(task_data: TaskCreate) -> TaskResponse:
     return await _repo.create_task(task_data)
 
 
-async def get_all_tasks() -> list[TaskResponse]:
-    return await _repo.get_all_tasks()
+async def get_all_tasks(
+    search: Optional[str] = None, done: Optional[bool] = None
+) -> list[TaskResponse]:
+    return await _repo.get_all_tasks(search=search, done=done)
 
 
 async def get_task(task_id: int) -> Optional[TaskResponse]:
@@ -33,3 +35,7 @@ async def update_task(task_id: int, task_data: TaskUpdate) -> Optional[TaskRespo
 
 async def delete_task(task_id: int) -> bool:
     return await _repo.delete_task(task_id)
+
+
+async def get_stats() -> dict:
+    return await _repo.get_stats()

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.task import TaskCreate, TaskUpdate, TaskResponse
@@ -5,10 +7,19 @@ from app.services import task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
+stats_router = APIRouter(tags=["stats"])
+
 
 @router.get("/", response_model=list[TaskResponse])
-async def list_tasks():
-    return await task_service.get_all_tasks()
+async def list_tasks(
+    search: Optional[str] = None, done: Optional[bool] = None
+):
+    return await task_service.get_all_tasks(search=search, done=done)
+
+
+@stats_router.get("/stats")
+async def get_stats():
+    return await task_service.get_stats()
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

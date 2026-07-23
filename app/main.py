@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import close_pool, get_pool, is_postgres_enabled
-from app.routers import tasks
+from app.routers import tasks, scrape
 
 load_dotenv()
 
@@ -53,6 +53,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="FlyRank API", version="0.3.0", lifespan=lifespan)
 
 app.include_router(tasks.router)
+app.include_router(tasks.stats_router)
+app.include_router(scrape.router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -75,7 +77,7 @@ async def home():
     info = {
         "name": "Task API",
         "version": "1.0",
-        "endpoints": ["/tasks"],
+        "endpoints": ["/tasks", "/scrape"],
     }
     if get_redis():
         info["redis"] = "connected"
