@@ -1,3 +1,9 @@
 __pycache__/
 .env
 .vscode/
+tasks.db
+*.db
+.pytest_cache/
+.coverage
+htmlcov/
+screenshots/

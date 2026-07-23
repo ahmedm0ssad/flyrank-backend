@@ -31,6 +31,49 @@ uvicorn app.main:app --reload
 
 Swagger docs at `/docs`.
 
+### SQLite (dev — default, no Docker)
+
+When `DATABASE_URL` is not set, the app uses **SQLite** via Python's standard library `sqlite3` (no extra dependencies).
+
+- **Database file**: `tasks.db` — created automatically at the project root on first run.
+- **Schema**: Auto-created `CREATE TABLE IF NOT EXISTS tasks(...)` on startup.
+- **Seeding**: If the table is empty on startup, 3 example tasks are inserted. The guard is `SELECT COUNT(*) FROM tasks` — never duplicates rows. Deleting `tasks.db` transparently recreates and reseeds.
+- **Persistence**: Data survives app restarts as long as `tasks.db` remains on disk.
+- **Connection strategy**: One `sqlite3.connect()` per request. Safe at this scale. No thread sharing.
+- **SQL safety**: All queries use `?` placeholders with parameter tuples. No string concatenation of user input.
+
+Example SQL query run behind `GET /tasks`:
+
+```sql
+SELECT id, title, done, created_at, updated_at
+FROM tasks
+WHERE done = 1
+ORDER BY title;
+```
+
+![Database screenshot](screenshots/database.png)
+
+### Persistence proof (SQLite)
+
+```bash
+# 1. Start the app (no Docker, no DATABASE_URL)
+uvicorn app.main:app --reload
+
+# 2. Create a task
+curl -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title": "persistent task", "done": false}'
+
+# 3. Note the returned ID (e.g. 4)
+
+# 4. Stop the server (Ctrl+C), then start again
+
+# 5. Fetch the task — it still exists
+curl http://localhost:8000/tasks/4
+```
+
+---
+
 ### Request flow
 
 ```
@@ -43,10 +86,11 @@ Client
  Service (app/services/task_service.py)
   │
   ▼
- Repository (app/repositories/ — TaskRepository Protocol)
-  │
-  ├── PostgresRepository (PostgreSQL via asyncpg)
-  └── InMemoryRepository (in-memory dict fallback)
+  Repository (app/repositories/ — TaskRepository Protocol)
+   │
+   ├── PostgresRepository (PostgreSQL via asyncpg)
+   ├── SqliteRepository (SQLite via stdlib sqlite3)   ← default
+   └── InMemoryRepository (in-memory dict fallback)
   │
   ▼
  PostgreSQL (db service, pgdata volume)
@@ -61,9 +105,12 @@ app/
     models/
         task.py             # Pydantic schemas
     services/
-        task_service.py     # Business logic — delegates to in-memory or Postgres repo
+        task_service.py     # Business logic — delegates to SQLite or Postgres repo
     repositories/
         postgres_repo.py    # Postgres repository (asyncpg)
+        sqlite_repo.py      # SQLite repository (stdlib sqlite3) — default
+        inmemory_repo.py    # In-memory fallback (still conforms to protocol)
+        protocol.py         # TaskRepository Protocol
     routers/
         tasks.py            # HTTP endpoints (async)
 db/
@@ -100,7 +147,7 @@ Both `PostgresRepository` and `InMemoryRepository` conform to this interface.
 
 The `task_service.py` module selects the repository at import time:
 - If `DATABASE_URL` is set → `PostgresRepository`
-- Otherwise → `InMemoryRepository`
+- Otherwise → `SqliteRepository`
 
 Only the repository implementation changed:
 - **Service contract** stayed the same.
