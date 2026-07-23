@@ -8,3 +8,5 @@ tasks.db
 htmlcov/
 screenshots/
 docs/
+.env.bak
+server.log

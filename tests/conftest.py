@@ -2,6 +2,8 @@ import os
 
 os.environ["DATABASE_URL"] = ""
 os.environ["REDIS_URL"] = ""
+os.environ["SUPABASE_URL"] = "https://test.supabase.co"
+os.environ["SUPABASE_KEY"] = "test-anon-key"
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock

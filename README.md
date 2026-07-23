@@ -1,6 +1,6 @@
 # FlyRank Backend AI Engineering
 
-## Week 3 · Assignment A4 — Auth: Login & protect
+## Supabase Auth · Task CRUD · Book Scraper
 
 ### Run (dev)
 
@@ -261,6 +261,8 @@ PORT=8000
 6. The `.env` file is git-ignored — never commit real keys. `.env.example` has placeholder values.
 
 > **Note:** The `service_role` key is **never used** in this codebase. All authenticated operations use the anon key only.
+>
+> **.env variable name:** The code reads `SUPABASE_KEY` (not `SUPABASE_PUBLISHABLE_KEY`). Copy the publishable/anon key into the `SUPABASE_KEY` field.
 
 ### Run
 
@@ -288,23 +290,41 @@ Protected routes are wired with FastAPI's `HTTPBearer` security scheme. Open `/d
 
 > **Screenshot**: Add your Swagger UI screenshot here (e.g. `screenshots/swagger-auth.png`).
 
-### Assignment W3 A2 requirements checklist
+### Testing
 
-- [x] Same 5 CRUD endpoints as A1 — `GET /tasks`, `GET /tasks/:id`, `POST /tasks`, `PUT /tasks/:id`, `DELETE /tasks/:id`
-- [x] Tasks stored in SQLite (`tasks.db`), not in memory
-- [x] Data survives server restart (verified via API + DB Browser)
-- [x] `tasks.db` created automatically if missing
-- [x] `tasks` table created automatically if missing
-- [x] 3 example tasks seeded only on first run — no duplication on restart
-- [x] All queries use `?` parameterized placeholders (no string-glued SQL)
-- [x] Correct status codes: 200 / 201 / 204 / 400 / 404 with JSON error messages
-- [x] Public GitHub repo with ≥6 commits
+Run all unit tests (mocked Supabase, no network required):
 
-**Extras (stretch):**
-- [x] Search with SQL — `GET /tasks?search=milk` via `WHERE title LIKE ?`
-- [x] Filter by status — `GET /tasks?done=true` via `WHERE done = ?`
-- [x] Sort alphabetically — `ORDER BY title`
-- [x] Real statistics — `GET /stats` computed via `SELECT COUNT(*)`
-- [x] Timestamps — `created_at` / `updated_at` columns set on insert/update
-- [x] Index on `tasks(done)` with `EXPLAIN ANALYZE` before/after
-- [x] Transactions — seeding wrapped in `commit()` for all-or-nothing
+```bash
+pytest
+```
+
+Run only auth unit tests:
+
+```bash
+pytest tests/routers/test_auth.py -v
+```
+
+Auth tests cover:
+
+| Test class | What it tests |
+|---|---|
+| `TestSignup` | signup success, missing fields, Supabase errors |
+| `TestLogin` | login success, invalid credentials, other errors |
+| `TestProtected` | profile/dashboard with valid, missing, or tampered tokens |
+| `TestLogout` | logout with and without a Bearer token |
+
+The Supabase client is fully mocked via `monkeypatch` — no real Supabase calls are made in unit tests. See `tests/routers/test_auth.py` and `tests/conftest.py`.
+
+#### End-to-end (e2e) auth tests
+
+`tests/test_e2e.py` hits a **real** Supabase project and the **running** FastAPI server:
+
+```bash
+# 1. Start the server (ensure .env has SUPABASE_URL and SUPABASE_KEY)
+uvicorn app.main:app --port 8000
+
+# 2. In another terminal
+pytest tests/test_e2e.py -v -s
+```
+
+The e2e test creates a real user via the Supabase admin API, then exercises signup, login, protected endpoints, tampered tokens, and logout. A Supabase rate limit fallback automatically seeds a user via the `service_role` key when signups are throttled.
