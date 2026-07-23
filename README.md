@@ -1,41 +1,43 @@
 # FlyRank Backend AI Engineering
 
-## Assignment BE-04 — Containerized Task CRUD API
+## Week 3 · Assignment A2 — Connecting CRUD to SQLite
 
-### Run (Docker — production-like stack)
-
-```bash
-docker compose up --build
-```
-
-App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
-
-### Run (dev — in-memory, no Docker)
+### Run (dev — SQLite, default)
 
 ```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
+
+### Run (Docker — PostgreSQL)
+
+```bash
+docker compose up --build
+```
+
 ### Endpoints
 
-| Method | Path           | Description        |
-|--------|----------------|--------------------|
-| GET    | `/`            | Welcome message    |
-| GET    | `/health`      | Health check       |
-| GET    | `/tasks`       | List all tasks     |
-| GET    | `/tasks/{id}`  | Get a task by ID   |
-| POST   | `/tasks`       | Create a task      |
-| PUT    | `/tasks/{id}`  | Update a task      |
-| DELETE | `/tasks/{id}`  | Delete a task      |
+| Method | Path             | Description              |
+|--------|------------------|--------------------------|
+| GET    | `/`              | Welcome message          |
+| GET    | `/health`        | Health check             |
+| GET    | `/tasks`         | List all tasks           |
+| GET    | `/tasks/{id}`    | Get a task by ID         |
+| POST   | `/tasks`         | Create a task            |
+| PUT    | `/tasks/{id}`    | Update a task            |
+| DELETE | `/tasks/{id}`    | Delete a task            |
+| GET    | `/stats`         | Task statistics          |
+| POST   | `/scrape`        | Scrape books to database |
 
 Swagger docs at `/docs`.
 
-### SQLite (dev — default, no Docker)
+### SQLite (default, no Docker)
 
-When `DATABASE_URL` is not set, the app uses **SQLite** via Python's standard library `sqlite3` (no extra dependencies).
+When `DATABASE_URL` is not set, the app uses **SQLite** via Python's standard library `sqlite3` (no extra dependencies). Why SQLite? It's a single file, requires zero setup, and survives restarts — the simplest path from in-memory to persistence.
 
-- **Database file**: `tasks.db` — created automatically at the project root on first run.
+- **Database file**: `tasks.db` — created automatically at the project root on first run, gitignored so each clone starts fresh.
 - **Schema**: Auto-created `CREATE TABLE IF NOT EXISTS tasks(...)` on startup.
 - **Seeding**: If the table is empty on startup, 3 example tasks are inserted. The guard is `SELECT COUNT(*) FROM tasks` — never duplicates rows. Deleting `tasks.db` transparently recreates and reseeds.
 - **Persistence**: Data survives app restarts as long as `tasks.db` remains on disk.
@@ -51,12 +53,12 @@ WHERE done = 1
 ORDER BY title;
 ```
 
-![Database screenshot](screenshots/database.png)
+> **Screenshot**: Open `tasks.db` in [DB Browser for SQLite](https://sqlitebrowser.org/) to view rows and run queries. Add your screenshot at `screenshots/database.png`.
 
-### Persistence proof (SQLite)
+### Persistence proof
 
 ```bash
-# 1. Start the app (no Docker, no DATABASE_URL)
+# 1. Start the app
 uvicorn app.main:app --reload
 
 # 2. Create a task
@@ -73,6 +75,21 @@ curl http://localhost:8000/tasks/4
 ```
 
 ---
+
+### Scraper subsystem
+
+The app scrapes book data from `http://books.toscrape.com/` — a demo bookstore.
+
+| Component | File | Role |
+|-----------|------|------|
+| Session | `app/scrapers/session.py` | HTTP session with retry, rate-limiting, `robots.txt` compliance |
+| Parser | `app/scrapers/parser.py` | BeautifulSoup parsing of listing + detail pages |
+| Cleaner | `app/scrapers/cleaner.py` | Normalise prices, ratings, availability |
+| Pipeline | `app/scrapers/pipeline.py` | Orchestrates page iteration, detail fetch, merge, clean |
+| Repository | `app/repositories/scraped_book_repo.py` | PostgreSQL `bulk_upsert` via `ON CONFLICT` |
+| Endpoint | `POST /scrape?max_pages=5` | Triggers a scrape; returns `(books, errors)` |
+
+Requires `DATABASE_URL` pointing to a running PostgreSQL instance (e.g. via Docker).
 
 ### Request flow
 
@@ -221,14 +238,24 @@ Bitmap Heap Scan on tasks  (cost=4.52..125.34 rows=5000 width=68)
 
 The index on `tasks(done)` replaces a sequential scan with a bitmap index scan, reducing execution time significantly on a 10,000-row table.
 
-### Assignment requirements checklist
+### Assignment W3 A2 requirements checklist
 
-- [x] Postgres runs in Docker with a volume
-- [x] Whole stack starts with `docker compose up`
-- [x] Connection string from `.env` (`DATABASE_URL`), gitignored; `.env.example` committed
-- [x] Postgres repository replaced in-memory one — service and routes unchanged (async routes only)
-- [x] Persistence proven across app + container restart
-- [x] Redis in compose file, pinged from app on startup
+- [x] Same 5 CRUD endpoints as A1 — `GET /tasks`, `GET /tasks/:id`, `POST /tasks`, `PUT /tasks/:id`, `DELETE /tasks/:id`
+- [x] Tasks stored in SQLite (`tasks.db`), not in memory
+- [x] Data survives server restart (verified via API + DB Browser)
+- [x] `tasks.db` created automatically if missing
+- [x] `tasks` table created automatically if missing
+- [x] 3 example tasks seeded only on first run — no duplication on restart
+- [x] All queries use `?` parameterized placeholders (no string-glued SQL)
+- [x] Correct status codes: 200 / 201 / 204 / 400 / 404 with JSON error messages
+- [x] Public GitHub repo with ≥6 commits
+
+**Extras (stretch):**
+- [x] Search with SQL — `GET /tasks?search=milk` via `WHERE title LIKE ?`
+- [x] Filter by status — `GET /tasks?done=true` via `WHERE done = ?`
+- [x] Sort alphabetically — `ORDER BY title`
+- [x] Real statistics — `GET /stats` computed via `SELECT COUNT(*)`
+- [x] Timestamps — `created_at` / `updated_at` columns set on insert/update
 - [x] Index on `tasks(done)` with `EXPLAIN ANALYZE` before/after
-- [x] `.dockerignore` excludes unnecessary files from Docker build context
-- [x] `TaskRepository` Protocol defines the repository contract explicitly
+- [x] Transactions — seeding wrapped in `commit()` for all-or-nothing
+- [ ] AI rematch (Stage 6 bonus) — `ai-version/` folder with AI-generated code + "AI vs me" section
