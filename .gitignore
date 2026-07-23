@@ -7,3 +7,4 @@ tasks.db
 .coverage
 htmlcov/
 screenshots/
+docs/
