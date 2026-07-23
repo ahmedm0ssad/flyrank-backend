@@ -62,7 +62,12 @@ async def lifespan(app: FastAPI):
     await close_pool()
 
 
-app = FastAPI(title="FlyRank API", version="0.3.0", lifespan=lifespan)
+app = FastAPI(
+    title="FlyRank API",
+    version="0.3.0",
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True},
+)
 
 app.include_router(tasks.router)
 app.include_router(tasks.stats_router)

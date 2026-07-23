@@ -2,12 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from supabase import create_async_client
 
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import bearer_scheme, get_current_user
 from app.models.auth import AuthLogin, AuthSignup
 from app.supabase_client import get_client_credentials, get_supabase
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
-protected_router = APIRouter(prefix="/protected", tags=["protected"])
+protected_router = APIRouter(
+    prefix="/protected",
+    tags=["protected"],
+    dependencies=[Depends(bearer_scheme)],
+)
 
 
 @auth_router.post("/signup", status_code=status.HTTP_201_CREATED)
