@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from supabase import create_async_client
+
 from app.dependencies.auth import get_current_user
 from app.models.auth import AuthLogin, AuthSignup
-from app.supabase_client import get_supabase
+from app.supabase_client import get_client_credentials, get_supabase
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 protected_router = APIRouter(prefix="/protected", tags=["protected"])
@@ -58,3 +60,20 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
         "email": current_user["email"],
         "created_at": current_user["created_at"],
     }
+
+
+@protected_router.get("/dashboard")
+async def get_dashboard(current_user: dict = Depends(get_current_user)):
+    return {
+        "message": f"Welcome to your dashboard, {current_user['email']}",
+        "user_id": current_user["id"],
+    }
+
+
+@auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(current_user: dict = Depends(get_current_user)):
+    url, key = get_client_credentials()
+    scoped_client = await create_async_client(url, key)
+    await scoped_client.auth.set_session(current_user["access_token"], "")
+    await scoped_client.auth.sign_out()
+    return None

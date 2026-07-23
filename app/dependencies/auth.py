@@ -15,14 +15,16 @@ async def get_current_user(
             detail="Access token required",
         )
 
+    token = credentials.credentials
     supabase = await get_supabase()
     try:
-        res = await supabase.auth.get_user(credentials.credentials)
+        res = await supabase.auth.get_user(token)
         user = res.user
         return {
             "id": user.id,
             "email": user.email,
             "created_at": user.created_at,
+            "access_token": token,
         }
     except Exception:
         raise HTTPException(
