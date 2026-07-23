@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import close_pool, get_pool, is_postgres_enabled
 from app.routers import tasks, scrape
+from app.routers.ai import router as ai_router
 from app.routers.auth import auth_router, protected_router
 from app.supabase_client import get_client_credentials
 
@@ -72,6 +73,7 @@ app = FastAPI(
 app.include_router(tasks.router)
 app.include_router(tasks.stats_router)
 app.include_router(scrape.router)
+app.include_router(ai_router)
 app.include_router(auth_router)
 app.include_router(protected_router)
 

@@ -136,15 +136,52 @@ scripts/
     seed_explain.py         # EXPLAIN ANALYZE before/after index
 ```
 
+### Background Jobs (BE-06)
+
+AI calls run asynchronously via RQ (Redis Queue). The worker is a separate process that pops jobs from the same Redis instance.
+
+#### Run the worker
+
+```bash
+# Terminal 1 — start the API
+uvicorn app.main:app --reload --port 8000
+
+# Terminal 2 — start the RQ worker (adjust --url to match your REDIS_URL)
+rq worker ai-jobs --url redis://localhost:6379/0
+```
+
+#### Usage
+
+```
+POST /ai  { "prompt": "Tell me a joke", "model": "llama3-8b-8192" }
+→ 202  { "job_id": "<uuid>", "status_url": "/jobs/<uuid>" }
+
+GET /jobs/<uuid>
+→ 200  { "status": "queued" | "processing" | "completed" | "failed" }
+```
+
+#### Idempotency-Key
+
+Pass an `Idempotency-Key` header on `POST /ai` to prevent duplicate enqueues. If a job with the same key was created within 24h, the existing `job_id` is returned instead of creating a new one. **Without this header**, every request enqueues a new job — callers are responsible for deduplication.
+
+#### Retries
+
+Jobs retry up to 3 times with exponential backoff (10s, 60s, 300s). After exhaustion, status is `"failed"` with `attempts: 3` and the last error message.
+
+#### Alerts
+
+On permanent failure, `send_alert()` in `app/services/alert.py` is called. It currently logs at CRITICAL level — swap the body for a Slack/email/PagerDuty webhook in production.
+
 ### Stack
 
-| Component | Technology            |
-|-----------|-----------------------|
-| API       | FastAPI + uvicorn     |
-| Database  | PostgreSQL 16 (Docker)|
-| Cache     | Redis 7 (Docker)      |
-| DB Driver | asyncpg               |
-| Config    | .env (gitignored)     |
+| Component     | Technology                  |
+|---------------|-----------------------------|
+| API           | FastAPI + uvicorn           |
+| Database      | PostgreSQL 16 (Docker)      |
+| Cache / Queue | Redis 7 (Docker)            |
+| Job Queue     | RQ (Redis Queue)            |
+| DB Driver     | asyncpg                     |
+| Config        | .env (gitignored)           |
 
 ### Key design note — Repository Swap
 
