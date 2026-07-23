@@ -258,4 +258,3 @@ The index on `tasks(done)` replaces a sequential scan with a bitmap index scan, 
 - [x] Timestamps — `created_at` / `updated_at` columns set on insert/update
 - [x] Index on `tasks(done)` with `EXPLAIN ANALYZE` before/after
 - [x] Transactions — seeding wrapped in `commit()` for all-or-nothing
-- [ ] AI rematch (Stage 6 bonus) — `ai-version/` folder with AI-generated code + "AI vs me" section
