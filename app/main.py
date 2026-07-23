@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import close_pool, get_pool, is_postgres_enabled
 from app.routers import tasks, scrape
+from app.supabase_client import get_client_credentials
 
 load_dotenv()
 
@@ -24,6 +25,16 @@ def get_redis() -> redis_ai.Redis | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _redis_client
+
+    supa_url, supa_key = get_client_credentials()
+    if supa_url and supa_key:
+        print("Supabase client configured")
+    else:
+        print("FATAL: SUPABASE_URL and SUPABASE_KEY must be set in .env")
+        raise RuntimeError("Missing Supabase credentials")
+
+    port = os.getenv("PORT", "8000")
+    print(f"Server starting on port {port}")
 
     if is_postgres_enabled():
         pool = await get_pool()
