@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import close_pool, get_pool, is_postgres_enabled
 from app.routers import tasks, scrape
+from app.routers.auth import auth_router
 from app.supabase_client import get_client_credentials
 
 load_dotenv()
@@ -66,6 +67,7 @@ app = FastAPI(title="FlyRank API", version="0.3.0", lifespan=lifespan)
 app.include_router(tasks.router)
 app.include_router(tasks.stats_router)
 app.include_router(scrape.router)
+app.include_router(auth_router)
 
 
 @app.exception_handler(RequestValidationError)
