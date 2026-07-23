@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import close_pool, get_pool, is_postgres_enabled
 from app.routers import tasks, scrape
-from app.routers.auth import auth_router
+from app.routers.auth import auth_router, protected_router
 from app.supabase_client import get_client_credentials
 
 load_dotenv()
@@ -68,6 +68,7 @@ app.include_router(tasks.router)
 app.include_router(tasks.stats_router)
 app.include_router(scrape.router)
 app.include_router(auth_router)
+app.include_router(protected_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -95,6 +96,11 @@ async def home():
     if get_redis():
         info["redis"] = "connected"
     return info
+
+
+@app.get("/public/info")
+async def public_info():
+    return {"message": "Welcome stranger! This info is public."}
 
 
 @app.get("/health")

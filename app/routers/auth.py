@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.dependencies.auth import get_current_user
 from app.models.auth import AuthLogin, AuthSignup
 from app.supabase_client import get_supabase
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
+protected_router = APIRouter(prefix="/protected", tags=["protected"])
 
 
 @auth_router.post("/signup", status_code=status.HTTP_201_CREATED)
@@ -47,3 +49,12 @@ async def login(body: AuthLogin):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=msg,
         )
+
+
+@protected_router.get("/profile")
+async def get_profile(current_user: dict = Depends(get_current_user)):
+    return {
+        "id": "placeholder",
+        "email": "placeholder",
+        "created_at": "placeholder",
+    }
