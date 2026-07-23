@@ -41,8 +41,16 @@ class InMemoryRepository:
         self._next_id += 1
         return TaskResponse(**task)
 
-    async def get_all_tasks(self) -> list[TaskResponse]:
-        return [TaskResponse(**t) for t in self._tasks.values()]
+    async def get_all_tasks(
+        self, search: Optional[str] = None, done: Optional[bool] = None
+    ) -> list[TaskResponse]:
+        tasks = list(self._tasks.values())
+        if search is not None:
+            tasks = [t for t in tasks if search.lower() in t["title"].lower()]
+        if done is not None:
+            tasks = [t for t in tasks if t["done"] == done]
+        tasks.sort(key=lambda t: t["title"])
+        return [TaskResponse(**t) for t in tasks]
 
     async def get_task(self, task_id: int) -> Optional[TaskResponse]:
         task = self._tasks.get(task_id)
@@ -67,3 +75,8 @@ class InMemoryRepository:
             del self._tasks[task_id]
             return True
         return False
+
+    async def get_stats(self) -> dict:
+        total = len(self._tasks)
+        done = sum(1 for t in self._tasks.values() if t["done"])
+        return {"total": total, "done": done, "not_done": total - done}
