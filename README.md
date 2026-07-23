@@ -1,12 +1,12 @@
 # FlyRank Backend AI Engineering
 
-## Week 3 · Assignment A2 — Connecting CRUD to SQLite
+## Week 3 · Assignment A4 — Auth: Login & protect
 
-### Run (dev — SQLite, default)
+### Run (dev)
 
 ```bash
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
 App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
@@ -237,6 +237,56 @@ Bitmap Heap Scan on tasks  (cost=4.52..125.34 rows=5000 width=68)
 ```
 
 The index on `tasks(done)` replaces a sequential scan with a bitmap index scan, reducing execution time significantly on a 10,000-row table.
+
+---
+
+## Auth System
+
+This API uses **Supabase Auth** for user authentication. All credential and token operations go through the Supabase SDK — no self-rolled password hashing, JWT signing, or crypto.
+
+### Setup
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+2. Go to your project dashboard → Authentication → Settings
+3. **Turn off "Confirm email"** (set to disabled) so that users can sign up without email verification during development
+4. Copy your project URL and anon (public) key from the API settings page
+5. Add them to `.env`:
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_anon_key_here
+PORT=8000
+```
+
+6. The `.env` file is git-ignored — never commit real keys. `.env.example` has placeholder values.
+
+> **Note:** The `service_role` key is **never used** in this codebase. All authenticated operations use the anon key only.
+
+### Run
+
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
+
+### API Reference
+
+| Method | Path | Auth Required | Success | Description |
+|---|---|---|---|---|
+| POST | `/auth/signup` | No | `201` + user object | Create a new account |
+| POST | `/auth/login` | No | `200` + `{access_token, refresh_token}` | Sign in with email + password |
+| POST | `/auth/logout` | Yes (Bearer) | `204` | Sign out (invalidate session) |
+| GET | `/protected/profile` | Yes (Bearer) | `200` + `{id, email, created_at}` | Get the authenticated user's profile |
+| GET | `/protected/dashboard` | Yes (Bearer) | `200` + welcome message | Authenticated user's dashboard |
+| GET | `/public/info` | No | `200` + static message | Public info endpoint, no auth required |
+
+### Swagger / OpenAPI
+
+Protected routes are wired with FastAPI's `HTTPBearer` security scheme. Open `/docs` in your browser, click the **Authorize** button, paste your Bearer token, and call protected endpoints directly from the Swagger UI.
+
+> **Screenshot**: Add your Swagger UI screenshot here (e.g. `screenshots/swagger-auth.png`).
 
 ### Assignment W3 A2 requirements checklist
 
