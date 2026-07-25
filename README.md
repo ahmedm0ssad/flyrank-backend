@@ -80,18 +80,24 @@ The API is available at `http://localhost:8000`, with interactive Swagger docs a
 docker compose up --build
 ```
 
-### 4. Start the AI worker (optional)
+### 4. Start Redis
 
-AI background jobs require a running RQ worker in a separate process:
+Background jobs require a running Redis instance:
+
+```bash
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+### 5. Start the AI worker
+
+```bash
+python -m app.worker
+```
+
+Or using the RQ CLI directly:
 
 ```bash
 rq worker ai-jobs --url redis://localhost:6379/0
-```
-
-Alternatively, use the provided convenience script:
-
-```bash
-.\run_e2e.ps1
 ```
 
 ## Environment Variables
@@ -156,9 +162,10 @@ PORT=8000
 ### AI / Background Jobs
 
 | Method | Path             | Auth | Description               |
-|--------|------------------|------|------------------------------|
-| POST   | `/ai`            | No   | Enqueue an AI inference job    |
-| GET    | `/jobs/{job_id}` | No   | Poll job status                 |
+|--------|------------------|------|-----------------------------|
+| POST   | `/ai`            | No   | Enqueue an AI inference job  |
+| GET    | `/jobs/{job_id}` | No   | Poll job status               |
+| GET    | `/jobs`          | No   | List recent jobs              |
 
 ## Database
 
@@ -190,30 +197,147 @@ The scraper retrieves book data from `http://books.toscrape.com/`:
 
 ## AI Background Jobs
 
-AI inference is processed asynchronously via RQ (Redis Queue), with the worker running as a separate process.
+AI inference is processed asynchronously via RQ (Redis Queue), with a dedicated worker process consuming jobs from the `ai-jobs` queue.
 
-### Usage
+### Architecture Diagram
 
 ```
-POST /ai
-{ "prompt": "Tell me a joke", "model": "llama3-8b-8192" }
-→ 202 { "job_id": "<uuid>", "status_url": "/jobs/<uuid>" }
-
-GET /jobs/<uuid>
-→ 200 { "status": "queued" | "processing" | "completed" | "failed" }
+┌──────────┐     POST /ai     ┌──────────────┐     enqueue     ┌───────────┐
+│          │ ──────────────── │              │ ────────────── │           │
+│  Client  │                  │  FastAPI      │                │  Redis    │
+│          │ ◀────────────── │  (app.main)   │ ◀───────────── │  (Queue)  │
+└──────────┘   202 Accepted  └──────────────┘    job status   └─────┬─────┘
+       │                                                             │
+       │                    GET /jobs/{id}                           │
+       │ ─────────────────────────────────────────────────────        │
+       │ ◀────────────────────────────────────────────────────        │
+       │                                                              │
+                                                          ┌──────────▼──────────┐
+                                                          │    RQ Worker         │
+                                                          │  (app/worker.py)     │
+                                                          │                     │
+                                                          │  1. Dequeue job      │
+                                                          │  2. Set status:      │
+                                                          │     started          │
+                                                          │  3. Call AI service  │
+                                                          │  4. Set status:      │
+                                                          │     finished/failed  │
+                                                          └─────────────────────┘
 ```
 
-### Idempotency
+### Queue Flow
 
-Include an `Idempotency-Key` header on `POST /ai` to prevent duplicate enqueues. If a job with the same key was created within the last 24 hours, the existing `job_id` is returned instead of creating a new job.
+1. Client sends `POST /ai` with a prompt and optional model
+2. API validates the request, creates a job record in Redis with status `queued`
+3. Job is enqueued to the `ai-jobs` RQ queue
+4. API immediately returns `202 Accepted` with the `job_id`
+5. Worker picks up the job, sets status to `started`
+6. Worker calls the AI service (Groq API or mock)
+7. On success: status set to `finished`, result stored
+8. On failure: status set to `failed`, error stored; retries if attempts remain
 
-### Retries
+### Worker Flow
 
-Failed jobs are retried up to 3 times with exponential backoff (10s, 60s, 300s). After all retries are exhausted, the job status is set to `"failed"`, with `attempts: 3` and the last recorded error.
+1. Worker connects to Redis and starts listening on `ai-jobs` queue
+2. When a job arrives, it calls `run_ai_job` from `app.services.ai_worker`
+3. Worker updates job status to `started`
+4. Worker delegates AI logic to `app.services.ai_service.call_ai`
+5. On completion, status is set to `finished` with the result
+6. On failure, status is set to `failed` with the error message
+7. The worker logs each state transition for observability
 
-### Alerting
+### Running Redis
 
-On permanent failure, `send_alert()` in `app/services/alert.py` logs at `CRITICAL` level. This is a stub intended to be replaced with a Slack, email, or PagerDuty webhook in production.
+```bash
+# Using Docker
+docker run -d -p 6379:6379 redis:7-alpine
+
+# Verify
+redis-cli ping
+# PONG
+```
+
+### Running Worker
+
+```bash
+# Using the dedicated worker entry point (recommended)
+python -m app.worker
+
+# Or using the RQ CLI directly
+rq worker ai-jobs --url redis://localhost:6379/0
+
+# With logging
+python -m app.worker 2>&1 | tee worker.log
+```
+
+### Running API
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+### Example Requests
+
+```bash
+# Enqueue an AI job
+curl -X POST http://localhost:8000/ai \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Tell me a joke", "model": "llama3-8b-8192"}'
+
+# Response: 202 Accepted
+# {"job_id":"<uuid>","status":"queued"}
+
+# Poll job status
+curl http://localhost:8000/jobs/<uuid>
+
+# Response examples:
+# {"job_id":"<uuid>","status":"queued","created_at":"...","attempts":0}
+# {"job_id":"<uuid>","status":"started","created_at":"...","started_at":"...","attempts":0}
+# {"job_id":"<uuid>","status":"finished","result":"...","created_at":"...","started_at":"...","finished_at":"...","attempts":0}
+# {"job_id":"<uuid>","status":"failed","error":"...","created_at":"...","finished_at":"...","attempts":3}
+
+# List recent jobs
+curl http://localhost:8000/jobs?limit=10&offset=0
+
+# Response:
+# {"jobs":[...],"total":2}
+
+# Enqueue with idempotency key
+curl -X POST http://localhost:8000/ai \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: my-unique-key" \
+  -d '{"prompt": "Hello"}'
+```
+
+### How Retries Work
+
+Failed jobs are retried up to **3 times** with exponential backoff:
+
+| Attempt | Interval |
+|---------|----------|
+| 1st     | 10s      |
+| 2nd     | 60s      |
+| 3rd     | 300s (5m)|
+
+- Retries are configured at the RQ level via `Retry(max=3, interval=[10, 60, 300])`
+- The worker increments `current_attempt` in job meta on each failure
+- If `retries_left > 0`, the job is requeued with status `queued`
+- After all retries are exhausted, the job status is set to `failed` with the last error
+- An alert is sent via `app.services.alert.send_alert()` (stub — replace with Slack/email/webhook in production)
+- Jobs have a timeout of 600s (10 minutes); any job exceeding this is automatically failed
+- Job data is persisted in Redis with a 24h TTL, ensuring no job data is lost during retry cycles
+
+### How Idempotency Works
+
+Idempotency is handled via the **`Idempotency-Key`** header:
+
+1. Client includes an `Idempotency-Key` header on `POST /ai`
+2. The system checks if a job with this key was created within the last 24 hours
+3. If found: the existing `job_id` is returned — no duplicate job is created
+4. If not found: a new job is created and the key → job_id mapping is stored with a 24h TTL
+5. The idempotency key is stored in Redis as `idempotency:<key>` with 86400s TTL
+
+**Idempotency guarantee:** Running the same request with the same idempotency key will always return the same `job_id`. This prevents duplicate AI inferences when clients retry requests due to network issues.
 
 ## Project Architecture
 
@@ -224,10 +348,12 @@ app/
     main.py                     # FastAPI app, lifespan, router mounting
     database.py                 # asyncpg connection pool
     supabase_client.py          # Supabase async client singleton
+    queue.py                    # Redis connection, RQ queue, job CRUD
+    worker.py                   # Standalone RQ worker entry point
     dependencies/
         auth.py                 # Bearer token dependency
     models/
-        task.py, auth.py, scraped_book.py
+        task.py, auth.py, scraped_book.py, job.py
     services/
         task_service.py         # Task business logic
         scraped_book_service.py # Scrape orchestration
@@ -264,22 +390,33 @@ Client → Routes → Services → Repositories → Database
                               │  InMemory  │
                               └───────────┘
 
-AI Jobs: Client → POST /ai → RQ (Redis) → Worker → Groq API
-                                    │
-                              GET /jobs/{id} ← status update
+AI Jobs: Client → POST /ai → app.queue → RQ (Redis) → Worker → Groq API
+                                       │
+                                 GET /jobs/{id} ← status updates
+                                       │
+                                 GET /jobs ← list recent jobs
 ```
 
 ## Testing
 
 ```bash
-# All unit tests (mocked Supabase, no network required)
+# All unit tests (mocked Redis, no network required)
 pytest
 
-# Auth tests
-pytest tests/routers/test_auth.py -v
+# With coverage
+pytest --cov=app --cov-report=term-missing
 
 # AI job tests
 pytest tests/test_ai_unit.py -v
+
+# Router tests
+pytest tests/routers/test_ai.py -v
+
+# Worker tests
+pytest tests/test_worker.py -v
+
+# Background job tests (comprehensive)
+pytest tests/test_background_jobs.py -v
 
 # End-to-end auth (requires real Supabase + a running server)
 pytest tests/test_e2e.py -v -s
@@ -288,7 +425,7 @@ pytest tests/test_e2e.py -v -s
 pytest tests/test_ai_e2e.py -v -s
 ```
 
-Test coverage spans 22 test files across models, routers, services, repositories, scrapers, and end-to-end flows.
+Test coverage spans models, routers, services, repositories, workers, and end-to-end flows.
 
 ## Example Requests
 
@@ -317,3 +454,4 @@ curl -X POST http://localhost:8000/ai -H "Content-Type: application/json" -d '{"
 - No email verification flow (disable Supabase's "Confirm email" setting for local development)
 - The scraper runs synchronously within the request thread
 - Supabase free-tier rate limits may affect auth end-to-end tests
+- Job listing uses Redis `SCAN` which may be slow with very large job sets
