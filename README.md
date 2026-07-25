@@ -34,6 +34,7 @@ Built with FastAPI, PostgreSQL/SQLite, Redis, Supabase Auth, and the Groq LLM AP
 - **AI Background Jobs** — asynchronous LLM inference via RQ (Redis Queue) and Groq
 - **Docker Compose Stack** — PostgreSQL, Redis, and the application, orchestrated together
 - **Comprehensive Test Suite** — unit, integration, and end-to-end coverage
+- **CI Pipeline** — automated linting (isort, Black, Ruff) and testing via GitHub Actions
 
 ## Technology Stack
 
@@ -47,6 +48,8 @@ Built with FastAPI, PostgreSQL/SQLite, Redis, Supabase Auth, and the Groq LLM AP
 | Auth            | Supabase Auth                      |
 | Scraping        | requests + BeautifulSoup4 + lxml   |
 | Container       | Docker + Docker Compose            |
+| Linting         | Ruff, Black, isort                 |
+| CI              | GitHub Actions                     |
 | Config          | python-dotenv                      |
 
 ## Requirements
@@ -411,9 +414,6 @@ pytest
 # With coverage
 pytest --cov=app --cov-report=term-missing
 
-# AI job tests
-pytest tests/test_ai_unit.py -v
-
 # Router tests
 pytest tests/routers/test_ai.py -v
 
@@ -431,6 +431,16 @@ pytest tests/test_ai_e2e.py -v -s
 ```
 
 Test coverage spans models, routers, services, repositories, workers, and end-to-end flows.
+
+### CI Pipeline
+
+Every push and pull request to `main` triggers a GitHub Actions workflow that:
+
+- **Lints** with isort (import order), Black (code formatting), and Ruff (static analysis)
+- **Tests** the full suite (excluding infrastructure-dependent E2E tests) with coverage reporting
+- **Caches** pip dependencies for faster subsequent runs
+
+The workflow is defined in `.github/workflows/ci.yml`. Status is shown in the badge at the top of this document.
 
 ## Example Requests
 
