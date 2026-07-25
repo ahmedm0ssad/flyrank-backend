@@ -1,296 +1,223 @@
-# FlyRank Backend AI Engineering
+# FlyRank — Auth, Login & Protect
 
-## Supabase Auth · Task CRUD · Book Scraper
+A FastAPI task management API with Supabase authentication, PostgreSQL persistence, and a book scraping subsystem.
 
-### Run (dev)
+## Assignment Goal
+
+Add user authentication with Supabase Auth (signup, login, logout) and protect specific endpoints behind Bearer token authorization.
+
+## Features
+
+- User authentication via Supabase Auth (signup, login, logout)
+- Protected endpoints (profile, dashboard) behind Bearer token
+- Public info endpoint (no auth required)
+- Full CRUD for tasks with filtering and statistics
+- Database-backed persistence (SQLite default, PostgreSQL optional)
+- Book scraping from `http://books.toscrape.com/`
+- Robots.txt compliance with rate-limited scraping
+- Repository Protocol abstraction for database swap
+- Redis health check on startup
+- Docker Compose stack (PostgreSQL + Redis + App)
+
+## Technologies Used
+
+| Component      | Technology                              |
+|----------------|-----------------------------------------|
+| Framework      | FastAPI                                 |
+| Server         | Uvicorn                                 |
+| Validation     | Pydantic                                |
+| Authentication | Supabase Auth                           |
+| Database       | SQLite (default) / PostgreSQL 16        |
+| DB Driver      | asyncpg (PostgreSQL) / sqlite3 (stdlib) |
+| Cache          | Redis 7 (optional)                      |
+| Container      | Docker + Docker Compose                 |
+| Scraping       | requests + BeautifulSoup4 + lxml        |
+| Config         | python-dotenv                           |
+
+## Requirements
+
+- Python 3.10+
+- pip
+- Supabase project (free tier)
+- Docker (optional, for PostgreSQL stack)
+
+## Installation
 
 ```bash
 pip install -r requirements.txt
+```
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+REDIS_URL=redis://host:6379/0
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_anon_key_here
+SUPABASE_SERVICE_KEY=your_service_role_key
+PORT=8000
+```
+
+### Supabase Setup
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+2. Go to Authentication → Settings and **disable "Confirm email"** for development
+3. Copy your project URL and anon (public) key from the API settings
+4. Set `SUPABASE_URL` and `SUPABASE_KEY` in `.env`
+
+The `service_role` key is **never used** in the application code — it is only required for e2e tests.
+
+## Running Locally (SQLite)
+
+```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
+The API is available at `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
 
-### Run (Docker — PostgreSQL)
+## Running with Docker (PostgreSQL)
 
 ```bash
 docker compose up --build
 ```
 
-### Endpoints
+## API Endpoints
 
-| Method | Path             | Description              |
-|--------|------------------|--------------------------|
-| GET    | `/`              | Welcome message          |
-| GET    | `/health`        | Health check             |
-| GET    | `/tasks`         | List all tasks           |
-| GET    | `/tasks/{id}`    | Get a task by ID         |
-| POST   | `/tasks`         | Create a task            |
-| PUT    | `/tasks/{id}`    | Update a task            |
-| DELETE | `/tasks/{id}`    | Delete a task            |
-| GET    | `/stats`         | Task statistics          |
-| POST   | `/scrape`        | Scrape books to database |
+### Auth
 
-Swagger docs at `/docs`.
+| Method | Path                  | Auth Required | Description                          |
+|--------|-----------------------|---------------|--------------------------------------|
+| POST   | `/auth/signup`        | No            | Create a new account                 |
+| POST   | `/auth/login`         | No            | Sign in with email + password        |
+| POST   | `/auth/logout`        | Yes (Bearer)  | Sign out (invalidate session)        |
 
-### SQLite (default, no Docker)
+### Protected
 
-When `DATABASE_URL` is not set, the app uses **SQLite** via Python's standard library `sqlite3` (no extra dependencies). Why SQLite? It's a single file, requires zero setup, and survives restarts — the simplest path from in-memory to persistence.
+| Method | Path                    | Auth Required | Description                              |
+|--------|-------------------------|---------------|------------------------------------------|
+| GET    | `/protected/profile`    | Yes (Bearer)  | Get the authenticated user's profile     |
+| GET    | `/protected/dashboard`  | Yes (Bearer)  | Authenticated user's dashboard           |
 
-- **Database file**: `tasks.db` — created automatically at the project root on first run, gitignored so each clone starts fresh.
-- **Schema**: Auto-created `CREATE TABLE IF NOT EXISTS tasks(...)` on startup.
-- **Seeding**: If the table is empty on startup, 3 example tasks are inserted. The guard is `SELECT COUNT(*) FROM tasks` — never duplicates rows. Deleting `tasks.db` transparently recreates and reseeds.
-- **Persistence**: Data survives app restarts as long as `tasks.db` remains on disk.
-- **Connection strategy**: One `sqlite3.connect()` per request. Safe at this scale. No thread sharing.
-- **SQL safety**: All queries use `?` placeholders with parameter tuples. No string concatenation of user input.
+### Tasks
 
-Example SQL query run behind `GET /tasks`:
+| Method | Path          | Auth Required | Description               |
+|--------|---------------|---------------|---------------------------|
+| GET    | `/tasks`      | No            | List tasks (filterable)   |
+| GET    | `/tasks/{id}` | No            | Get a task by ID          |
+| POST   | `/tasks`      | No            | Create a task             |
+| PUT    | `/tasks/{id}` | No            | Update a task             |
+| DELETE | `/tasks/{id}` | No            | Delete a task             |
+| GET    | `/stats`      | No            | Task statistics           |
 
-```sql
-SELECT id, title, done, created_at, updated_at
-FROM tasks
-WHERE done = 1
-ORDER BY title;
-```
+### Scraper
 
-> **Screenshot**: Open `tasks.db` in [DB Browser for SQLite](https://sqlitebrowser.org/) to view rows and run queries. Add your screenshot at `screenshots/database.png`.
+| Method | Path              | Auth Required | Description                          |
+|--------|-------------------|---------------|--------------------------------------|
+| POST   | `/scrape`         | No            | Scrape books (query: `?max_pages=5`) |
 
-### Persistence proof
+### General
 
-```bash
-# 1. Start the app
-uvicorn app.main:app --reload
+| Method | Path          | Auth Required | Description                     |
+|--------|---------------|---------------|---------------------------------|
+| GET    | `/`           | No            | Welcome message                 |
+| GET    | `/health`     | No            | Health check                    |
+| GET    | `/public/info`| No            | Public information endpoint     |
 
-# 2. Create a task
-curl -X POST http://localhost:8000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title": "persistent task", "done": false}'
+## Authentication
 
-# 3. Note the returned ID (e.g. 4)
+The API uses **Supabase Auth** for user authentication. All credential and token operations go through the Supabase SDK — no self-rolled password hashing, JWT signing, or crypto.
 
-# 4. Stop the server (Ctrl+C), then start again
+Protected routes are wired with FastAPI's `HTTPBearer` security scheme. Open `/docs` in your browser, click the **Authorize** button, paste your Bearer token, and call protected endpoints directly from the Swagger UI.
 
-# 5. Fetch the task — it still exists
-curl http://localhost:8000/tasks/4
-```
+The `get_current_user` dependency in `app/dependencies/auth.py` validates the Bearer token against Supabase and returns the user profile. Invalid or expired tokens return `401 Unauthorized`.
 
----
+## Database
 
-### Scraper subsystem
+### SQLite (Default)
+
+When `DATABASE_URL` is not set, the app uses SQLite via Python's standard library `sqlite3`. The database file `tasks.db` is created automatically in the project root on first run. Schema is auto-created with seed data on first startup.
+
+### PostgreSQL (via DATABASE_URL)
+
+When `DATABASE_URL` is set, the app connects to PostgreSQL via asyncpg with a connection pool (min 2, max 10). The `db/init.sql` file creates both the `tasks` and `scraped_books` tables with relevant indexes.
+
+## Scraper Architecture
 
 The app scrapes book data from `http://books.toscrape.com/` — a demo bookstore.
 
-| Component | File | Role |
-|-----------|------|------|
-| Session | `app/scrapers/session.py` | HTTP session with retry, rate-limiting, `robots.txt` compliance |
-| Parser | `app/scrapers/parser.py` | BeautifulSoup parsing of listing + detail pages |
-| Cleaner | `app/scrapers/cleaner.py` | Normalise prices, ratings, availability |
-| Pipeline | `app/scrapers/pipeline.py` | Orchestrates page iteration, detail fetch, merge, clean |
-| Repository | `app/repositories/scraped_book_repo.py` | PostgreSQL `bulk_upsert` via `ON CONFLICT` |
-| Endpoint | `POST /scrape?max_pages=5` | Triggers a scrape; returns `(books, errors)` |
+| Component | File                       | Role                                                |
+|-----------|----------------------------|-----------------------------------------------------|
+| Session   | `app/scrapers/session.py`  | HTTP session with retry, rate-limiting, robots.txt  |
+| Parser    | `app/scrapers/parser.py`   | BeautifulSoup parsing of listing + detail pages     |
+| Cleaner   | `app/scrapers/cleaner.py`  | Normalise prices, ratings, availability             |
+| Pipeline  | `app/scrapers/pipeline.py` | Orchestrates page iteration, detail fetch, merge    |
+| Repository| `app/repositories/scraped_book_repo.py` | PostgreSQL bulk_upsert via ON CONFLICT |
+| Service   | `app/services/scraped_book_service.py` | Manages scrape lifecycle and persistence   |
+| Endpoint  | `POST /scrape?max_pages=5` | Triggers a scrape; returns (books_saved, errors)    |
 
 Requires `DATABASE_URL` pointing to a running PostgreSQL instance (e.g. via Docker).
 
-### Request flow
+## Architecture
+
+### Request Flow
 
 ```
 Client
   │
   ▼
- Routes (app/routers/tasks.py)
+ Routes (app/routers/ — auth.py, tasks.py, scrape.py)
   │
   ▼
- Service (app/services/task_service.py)
+ Service (app/services/ — task_service.py, scraped_book_service.py)
   │
   ▼
-  Repository (app/repositories/ — TaskRepository Protocol)
-   │
-   ├── PostgresRepository (PostgreSQL via asyncpg)
-   ├── SqliteRepository (SQLite via stdlib sqlite3)   ← default
-   └── InMemoryRepository (in-memory dict fallback)
+ Repository (app/repositories/ — TaskRepository Protocol)
   │
-  ▼
- PostgreSQL (db service, pgdata volume)
+  ├── PostgresRepository (PostgreSQL via asyncpg)
+  ├── SqliteRepository (SQLite via stdlib sqlite3)    ← default
+  └── ScrapedBookRepository (PostgreSQL for scraped books)
 ```
 
-### Architecture
+### Project Structure
 
 ```
 app/
-    main.py                 # FastAPI app, router mounting, Redis ping, lifespan
+    main.py                 # FastAPI app, router mounting, lifespan
     database.py             # asyncpg connection pool from .env
+    supabase_client.py      # Supabase async client singleton
+    dependencies/
+        auth.py             # Bearer token dependency (get_current_user)
     models/
-        task.py             # Pydantic schemas
+        task.py             # Task Pydantic schemas
+        auth.py             # Auth request schemas
+        scraped_book.py     # ScrapedBook Pydantic schemas
     services/
-        task_service.py     # Business logic — delegates to SQLite or Postgres repo
+        task_service.py     # Task business logic
+        scraped_book_service.py  # Scrape orchestration
     repositories/
-        postgres_repo.py    # Postgres repository (asyncpg)
-        sqlite_repo.py      # SQLite repository (stdlib sqlite3) — default
-        inmemory_repo.py    # In-memory fallback (still conforms to protocol)
         protocol.py         # TaskRepository Protocol
+        sqlite_repo.py      # SQLite repository (default)
+        postgres_repo.py    # Postgres repository (asyncpg)
+        inmemory_repo.py    # In-memory fallback
+        scraped_book_repo.py # ScrapedBook PostgreSQL repository
     routers/
-        tasks.py            # HTTP endpoints (async)
+        tasks.py            # Task HTTP endpoints
+        auth.py             # Auth HTTP endpoints (signup, login, logout)
+        scrape.py           # Scrape HTTP endpoint
+    scrapers/
+        session.py          # HTTP session with retry + robots.txt
+        parser.py           # BeautifulSoup parsing
+        cleaner.py          # Data normalisation
+        pipeline.py         # Scrape orchestration
 db/
-    init.sql                # Table DDL + index
+    init.sql                # PostgreSQL DDL (tasks + scraped_books)
 scripts/
     seed_explain.py         # EXPLAIN ANALYZE before/after index
 ```
 
-### Stack
-
-| Component | Technology            |
-|-----------|-----------------------|
-| API       | FastAPI + uvicorn     |
-| Database  | PostgreSQL 16 (Docker)|
-| Cache     | Redis 7 (Docker)      |
-| DB Driver | asyncpg               |
-| Config    | .env (gitignored)     |
-
-### Key design note — Repository Swap
-
-The repository implementation was swapped from in-memory to Postgres without changing the rest of the stack.
-
-A `TaskRepository` Protocol (`app/repositories/protocol.py`) defines the contract:
-
-| Method          | Signature                                      |
-|-----------------|------------------------------------------------|
-| `create_task`   | `(task_data: TaskCreate) -> TaskResponse`      |
-| `get_all_tasks` | `() -> list[TaskResponse]`                     |
-| `get_task`      | `(task_id: int) -> Optional[TaskResponse]`     |
-| `update_task`   | `(task_id: int, task_data: TaskUpdate) -> Optional[TaskResponse]` |
-| `delete_task`   | `(task_id: int) -> bool`                       |
-
-Both `PostgresRepository` and `InMemoryRepository` conform to this interface.
-
-The `task_service.py` module selects the repository at import time:
-- If `DATABASE_URL` is set → `PostgresRepository`
-- Otherwise → `SqliteRepository`
-
-Only the repository implementation changed:
-- **Service contract** stayed the same.
-- **Routes contract** stayed the same.
-- **API behavior** stayed the same.
-
-### Persistence proof
-
-To verify data survives restarts:
-
-```bash
-# 1. Start the stack
-docker compose up --build
-
-# 2. Create a task
-curl -X POST http://localhost:8000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title": "persistent task", "done": false}'
-
-# 3. Note the returned ID (e.g. 1)
-
-# 4. Stop everything
-docker compose down
-
-# 5. Start again
-docker compose up
-
-# 6. Fetch the task — it still exists
-curl http://localhost:8000/tasks/1
-# → {"id":1,"title":"persistent task","done":false,...}
-```
-
-The volume `pgdata` in `docker-compose.yml` ensures Postgres data persists across container restarts.
-
-### Redis connectivity (Stretch Goal)
-
-Redis was added as the optional Stretch Goal. It runs as a `redis:7-alpine` service in `docker-compose.yml` with a health check.
-
-Verification:
-- On startup, the app pings Redis (`PONG`) and logs the result.
-- The `/health` and `/` endpoints include `"redis": "connected"` when the connection is alive.
-- The app continues to function normally if Redis is unavailable — it only reports the status.
-
-### EXPLAIN ANALYZE — index performance
-
-Run the seed script against the running stack:
-
-```bash
-# Ensure the stack is up, then:
-pip install -r requirements.txt
-python scripts/seed_explain.py --rows 10000
-```
-
-Example output (actual values will vary):
-
-```
-=== BEFORE INDEX ===
-Seq Scan on tasks  (cost=0.00..180.00 rows=5000 width=68)
-  Filter: (done = true)
-  Planning Time: 0.123 ms
-  Execution Time: 15.234 ms
-
-=== AFTER INDEX ===
-Bitmap Heap Scan on tasks  (cost=4.52..125.34 rows=5000 width=68)
-  Recheck Cond: (done = true)
-  ->  Bitmap Index Scan on idx_tasks_done  (cost=0.00..4.52 rows=5000 width=0)
-        Index Cond: (done = true)
-  Planning Time: 0.234 ms
-  Execution Time: 2.456 ms
-```
-
-The index on `tasks(done)` replaces a sequential scan with a bitmap index scan, reducing execution time significantly on a 10,000-row table.
-
----
-
-## Auth System
-
-This API uses **Supabase Auth** for user authentication. All credential and token operations go through the Supabase SDK — no self-rolled password hashing, JWT signing, or crypto.
-
-### Setup
-
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Go to your project dashboard → Authentication → Settings
-3. **Turn off "Confirm email"** (set to disabled) so that users can sign up without email verification during development
-4. Copy your project URL and anon (public) key from the API settings page
-5. Add them to `.env`:
-
-```
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_anon_key_here
-PORT=8000
-```
-
-6. The `.env` file is git-ignored — never commit real keys. `.env.example` has placeholder values.
-
-> **Note:** The `service_role` key is **never used** in this codebase. All authenticated operations use the anon key only.
->
-> **.env variable name:** The code reads `SUPABASE_KEY` (not `SUPABASE_PUBLISHABLE_KEY`). Copy the publishable/anon key into the `SUPABASE_KEY` field.
-
-### Run
-
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
-
-### API Reference
-
-| Method | Path | Auth Required | Success | Description |
-|---|---|---|---|---|
-| POST | `/auth/signup` | No | `201` + user object | Create a new account |
-| POST | `/auth/login` | No | `200` + `{access_token, refresh_token}` | Sign in with email + password |
-| POST | `/auth/logout` | Yes (Bearer) | `204` | Sign out (invalidate session) |
-| GET | `/protected/profile` | Yes (Bearer) | `200` + `{id, email, created_at}` | Get the authenticated user's profile |
-| GET | `/protected/dashboard` | Yes (Bearer) | `200` + welcome message | Authenticated user's dashboard |
-| GET | `/public/info` | No | `200` + static message | Public info endpoint, no auth required |
-
-### Swagger / OpenAPI
-
-Protected routes are wired with FastAPI's `HTTPBearer` security scheme. Open `/docs` in your browser, click the **Authorize** button, paste your Bearer token, and call protected endpoints directly from the Swagger UI.
-
-> **Screenshot**: Add your Swagger UI screenshot here (e.g. `screenshots/swagger-auth.png`).
-
-### Testing
+## Testing
 
 Run all unit tests (mocked Supabase, no network required):
 
@@ -298,7 +225,7 @@ Run all unit tests (mocked Supabase, no network required):
 pytest
 ```
 
-Run only auth unit tests:
+Run auth-specific tests:
 
 ```bash
 pytest tests/routers/test_auth.py -v
@@ -306,18 +233,18 @@ pytest tests/routers/test_auth.py -v
 
 Auth tests cover:
 
-| Test class | What it tests |
-|---|---|
-| `TestSignup` | signup success, missing fields, Supabase errors |
-| `TestLogin` | login success, invalid credentials, other errors |
-| `TestProtected` | profile/dashboard with valid, missing, or tampered tokens |
-| `TestLogout` | logout with and without a Bearer token |
+| Test class      | What it tests                                    |
+|-----------------|--------------------------------------------------|
+| `TestSignup`    | signup success, missing fields, Supabase errors  |
+| `TestLogin`     | login success, invalid credentials, other errors |
+| `TestProtected` | profile/dashboard with valid, missing, tampered tokens |
+| `TestLogout`    | logout with and without a Bearer token           |
 
-The Supabase client is fully mocked via `monkeypatch` — no real Supabase calls are made in unit tests. See `tests/routers/test_auth.py` and `tests/conftest.py`.
+The Supabase client is fully mocked via `monkeypatch` — no real Supabase calls are made in unit tests.
 
-#### End-to-end (e2e) auth tests
+### End-to-End Auth Tests
 
-`tests/test_e2e.py` hits a **real** Supabase project and the **running** FastAPI server:
+`tests/test_e2e.py` hits a real Supabase project and the running FastAPI server:
 
 ```bash
 # 1. Start the server (ensure .env has SUPABASE_URL and SUPABASE_KEY)
@@ -327,4 +254,39 @@ uvicorn app.main:app --port 8000
 pytest tests/test_e2e.py -v -s
 ```
 
-The e2e test creates a real user via the Supabase admin API, then exercises signup, login, protected endpoints, tampered tokens, and logout. A Supabase rate limit fallback automatically seeds a user via the `service_role` key when signups are throttled.
+The e2e test creates a real user, then exercises signup, login, protected endpoints, tampered tokens, and logout.
+
+## Example Requests
+
+```bash
+# Sign up
+curl -X POST http://localhost:8000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "securepass"}'
+
+# Login
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "securepass"}'
+
+# Use the returned access_token for protected endpoints
+curl http://localhost:8000/protected/profile \
+  -H "Authorization: Bearer <access_token>"
+
+# List tasks with filtering
+curl "http://localhost:8000/tasks?search=fastapi&done=false"
+
+# Get task statistics
+curl http://localhost:8000/stats
+
+# Trigger a book scrape (requires PostgreSQL with DATABASE_URL set)
+curl -X POST "http://localhost:8000/scrape?max_pages=3"
+```
+
+## Known Limitations
+
+- Scraped books require PostgreSQL — not available with SQLite
+- No rate limiting on auth endpoints
+- Supabase email confirmation should be disabled in development
+- No background job queue (scraping runs synchronously in the request)
+- Supabase `service_role` key is used only for e2e tests
