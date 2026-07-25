@@ -30,7 +30,7 @@ IDEMPOTENCY_TTL = 86400
 
 def _get_queue():
     from redis import Redis
-    conn = Redis.from_url(_REDIS_URL, decode_responses=True)
+    conn = Redis.from_url(_REDIS_URL, decode_responses=True, protocol=2)
     return Queue("ai-jobs", connection=conn), conn
 
 

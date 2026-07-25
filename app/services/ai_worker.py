@@ -15,7 +15,7 @@ _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
 def _get_redis():
-    return redis.from_url(_REDIS_URL, decode_responses=True)
+    return redis.from_url(_REDIS_URL, decode_responses=True, protocol=2)
 
 
 def run_ai_job(payload: dict) -> str:
