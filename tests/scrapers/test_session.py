@@ -109,9 +109,12 @@ class TestScrapeSession:
             session.close()
 
     def test_init_uses_robots_crawl_delay(self):
-        with patch("app.scrapers.session.RobotsChecker.load"), patch(
-            "app.scrapers.session.RobotsChecker.crawl_delay",
-            new_callable=lambda: 5.0,
+        with (
+            patch("app.scrapers.session.RobotsChecker.load"),
+            patch(
+                "app.scrapers.session.RobotsChecker.crawl_delay",
+                new_callable=lambda: 5.0,
+            ),
         ):
             session = ScrapeSession("http://example.com")
             assert session._delay == 5.0

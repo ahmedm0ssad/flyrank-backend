@@ -1,6 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flyrank-backend"
+version = "0.3.0"
+description = "FastAPI backend for task management, web scraping, auth, and AI background jobs"
+requires-python = ">=3.10"
+dependencies = []
+
 [tool.ruff.lint.per-file-ignores]
 "app/routers/auth.py" = ["B008"]
 "app/dependencies/auth.py" = ["B008"]
 
 [tool.isort]
 profile = "black"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

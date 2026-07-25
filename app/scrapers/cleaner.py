@@ -3,16 +3,9 @@ import re
 from typing import Any
 
 from app.models.scraped_book import ScrapedBookCreate
+from app.scrapers.parser import RATING_MAP
 
 logger = logging.getLogger(__name__)
-
-RATING_MAP = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-}
 
 
 def _clean_price(raw: str) -> float | None:

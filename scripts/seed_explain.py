@@ -23,7 +23,9 @@ import asyncpg
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rows", type=int, default=10000, help="Number of rows to seed")
+    parser.add_argument(
+        "--rows", type=int, default=10000, help="Number of rows to seed"
+    )
     args = parser.parse_args()
 
     url = os.getenv("DATABASE_URL")

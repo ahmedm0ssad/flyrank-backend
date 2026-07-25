@@ -1,5 +1,10 @@
 # FlyRank Backend AI
 
+[![CI](https://github.com/ahmedm0ssad/flyrank-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmedm0ssad/flyrank-backend/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.13-blue)](https://www.python.org/downloads/release/python-3130/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-059485?logo=fastapi)](https://fastapi.tiangolo.com)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A FastAPI backend combining task management, web scraping, authentication, and asynchronous AI job processing in a single, production-oriented service.
 
 Built with FastAPI, PostgreSQL/SQLite, Redis, Supabase Auth, and the Groq LLM API, the project demonstrates a clean layered architecture (routers → services → repositories) alongside a background job pipeline for LLM inference.

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from rq import get_current_job
 
@@ -11,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _now() -> str:
-    from datetime import datetime, timezone
-
     return datetime.now(timezone.utc).isoformat()
 
 
