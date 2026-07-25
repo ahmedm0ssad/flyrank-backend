@@ -1,37 +1,121 @@
-# FlyRank Backend AI Engineering
+# FlyRank — Connecting to the Database
 
-## Assignment BE-04 — Containerized Task CRUD API
+A FastAPI task management API with database-backed persistence. Uses SQLite by default with PostgreSQL as a production-grade alternative, selectable via environment variable.
 
-### Run (Docker — production-like stack)
+## Assignment Goal
+
+Replace in-memory storage with a real database while keeping the service and route layer unchanged through a repository abstraction.
+
+## Features
+
+- Full CRUD for tasks with database persistence
+- SQLite as the default database (zero configuration)
+- PostgreSQL support via `DATABASE_URL` environment variable
+- Task filtering by `search` (title) and `done` status on `GET /tasks`
+- Task statistics endpoint (`GET /stats`)
+- Repository Protocol abstraction for database swap
+- Docker Compose stack with PostgreSQL and Redis
+- Redis health check on startup
+- EXPLAIN ANALYZE script for index performance benchmarking
+
+## Technologies Used
+
+| Component  | Technology                           |
+|------------|--------------------------------------|
+| Framework  | FastAPI                              |
+| Server     | Uvicorn                              |
+| Validation | Pydantic                             |
+| Database   | SQLite (default) / PostgreSQL 16     |
+| DB Driver  | asyncpg (PostgreSQL) / sqlite3 (stdlib) |
+| Cache      | Redis 7 (optional)                   |
+| Container  | Docker + Docker Compose              |
+| Config     | python-dotenv                        |
+
+## Requirements
+
+- Python 3.10+
+- pip
+- Docker (optional, for PostgreSQL stack)
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+REDIS_URL=redis://host:6379/0
+```
+
+- `DATABASE_URL` — if set, the app uses PostgreSQL via asyncpg. If omitted, the app uses SQLite (file: `tasks.db`).
+- `REDIS_URL` — if set, the app pings Redis on startup and includes connection status in responses.
+
+## Running Locally (SQLite — default)
+
+```bash
+uvicorn app.main:app --reload
+```
+
+The API is available at `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
+
+## Running with Docker (PostgreSQL + Redis)
 
 ```bash
 docker compose up --build
 ```
 
-App available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`.
+This starts PostgreSQL 16, Redis 7, and the FastAPI app. Ensure `.env` has `DATABASE_URL` and `REDIS_URL` set.
 
-### Run (dev — in-memory, no Docker)
+## API Endpoints
 
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+| Method | Path          | Description               | Query Parameters                      |
+|--------|---------------|---------------------------|---------------------------------------|
+| GET    | `/`           | Welcome message           |                                       |
+| GET    | `/health`     | Health check              |                                       |
+| GET    | `/tasks`      | List tasks (filterable)   | `?search=&done=true`                  |
+| GET    | `/tasks/{id}` | Get a task by ID          |                                       |
+| POST   | `/tasks`      | Create a task             |                                       |
+| PUT    | `/tasks/{id}` | Update a task             |                                       |
+| DELETE | `/tasks/{id}` | Delete a task             |                                       |
+| GET    | `/stats`      | Task statistics           |                                       |
+
+## Database
+
+### SQLite (Default)
+
+When `DATABASE_URL` is not set, the app uses SQLite via Python's standard library `sqlite3`. The database file `tasks.db` is created automatically in the project root on first run.
+
+- Schema auto-created with `CREATE TABLE IF NOT EXISTS tasks(...)` on startup.
+- If the table is empty, 3 example tasks are seeded automatically.
+- All queries use `?` placeholders with parameter tuples — no string concatenation of user input.
+- Each request opens a new connection (safe at this scale).
+
+### PostgreSQL (via DATABASE_URL)
+
+When `DATABASE_URL` is set, the app connects to PostgreSQL via asyncpg with a connection pool (min 2, max 10) and automatic retry on startup (up to 5 attempts).
+
+The `db/init.sql` file is mounted into the PostgreSQL container to auto-create the `tasks` table and an index on `done`:
+
+```sql
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    done BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
 ```
 
-### Endpoints
+## Architecture
 
-| Method | Path           | Description        |
-|--------|----------------|--------------------|
-| GET    | `/`            | Welcome message    |
-| GET    | `/health`      | Health check       |
-| GET    | `/tasks`       | List all tasks     |
-| GET    | `/tasks/{id}`  | Get a task by ID   |
-| POST   | `/tasks`       | Create a task      |
-| PUT    | `/tasks/{id}`  | Update a task      |
-| DELETE | `/tasks/{id}`  | Delete a task      |
-
-Swagger docs at `/docs`.
-
-### Request flow
+### Request Flow
 
 ```
 Client
@@ -46,13 +130,28 @@ Client
  Repository (app/repositories/ — TaskRepository Protocol)
   │
   ├── PostgresRepository (PostgreSQL via asyncpg)
+  ├── SqliteRepository (SQLite via stdlib sqlite3)    ← default
   └── InMemoryRepository (in-memory dict fallback)
-  │
-  ▼
- PostgreSQL (db service, pgdata volume)
 ```
 
-### Architecture
+The `task_service.py` module selects the repository at import time:
+- If `DATABASE_URL` is set → `PostgresRepository`
+- Otherwise → `SqliteRepository`
+
+### Repository Protocol
+
+`app/repositories/protocol.py` defines the `TaskRepository` Protocol:
+
+| Method          | Signature                                      |
+|-----------------|------------------------------------------------|
+| `create_task`   | `(task_data: TaskCreate) -> TaskResponse`      |
+| `get_all_tasks` | `(search?, done?) -> list[TaskResponse]`       |
+| `get_task`      | `(task_id: int) -> Optional[TaskResponse]`     |
+| `update_task`   | `(task_id: int, task_data: TaskUpdate) -> TaskResponse?` |
+| `delete_task`   | `(task_id: int) -> bool`                       |
+| `get_stats`     | `() -> dict`                                   |
+
+### Project Structure
 
 ```
 app/
@@ -61,55 +160,58 @@ app/
     models/
         task.py             # Pydantic schemas
     services/
-        task_service.py     # Business logic — delegates to in-memory or Postgres repo
+        task_service.py     # Business logic — delegates to repository
     repositories/
+        protocol.py         # TaskRepository Protocol
+        sqlite_repo.py      # SQLite repository (default)
         postgres_repo.py    # Postgres repository (asyncpg)
+        inmemory_repo.py    # In-memory fallback
     routers/
         tasks.py            # HTTP endpoints (async)
 db/
-    init.sql                # Table DDL + index
+    init.sql                # PostgreSQL table DDL + index
 scripts/
     seed_explain.py         # EXPLAIN ANALYZE before/after index
 ```
 
-### Stack
+### Redis Connectivity
 
-| Component | Technology            |
-|-----------|-----------------------|
-| API       | FastAPI + uvicorn     |
-| Database  | PostgreSQL 16 (Docker)|
-| Cache     | Redis 7 (Docker)      |
-| DB Driver | asyncpg               |
-| Config    | .env (gitignored)     |
+Redis is an optional dependency. If `REDIS_URL` is configured:
+- The app pings Redis on startup and logs the result.
+- The `/health` and `/` endpoints include `"redis": "connected"` when the connection is alive.
+- The app continues to function normally if Redis is unavailable.
 
-### Key design note — Repository Swap
+## EXPLAIN ANALYZE — Index Performance
 
-The repository implementation was swapped from in-memory to Postgres without changing the rest of the stack.
+Run the seed script against the running PostgreSQL stack:
 
-A `TaskRepository` Protocol (`app/repositories/protocol.py`) defines the contract:
+```bash
+pip install -r requirements.txt
+python scripts/seed_explain.py --rows 10000
+```
 
-| Method          | Signature                                      |
-|-----------------|------------------------------------------------|
-| `create_task`   | `(task_data: TaskCreate) -> TaskResponse`      |
-| `get_all_tasks` | `() -> list[TaskResponse]`                     |
-| `get_task`      | `(task_id: int) -> Optional[TaskResponse]`     |
-| `update_task`   | `(task_id: int, task_data: TaskUpdate) -> Optional[TaskResponse]` |
-| `delete_task`   | `(task_id: int) -> bool`                       |
+The script seeds N rows, then runs `EXPLAIN ANALYZE` on a filtered query before and after creating an index on `tasks(done)`.
 
-Both `PostgresRepository` and `InMemoryRepository` conform to this interface.
+## Persistence Proof
 
-The `task_service.py` module selects the repository at import time:
-- If `DATABASE_URL` is set → `PostgresRepository`
-- Otherwise → `InMemoryRepository`
+### SQLite
 
-Only the repository implementation changed:
-- **Service contract** stayed the same.
-- **Routes contract** stayed the same.
-- **API behavior** stayed the same.
+```bash
+# 1. Start the app
+uvicorn app.main:app --reload
 
-### Persistence proof
+# 2. Create a task
+curl -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title": "persistent task", "done": false}'
 
-To verify data survives restarts:
+# 3. Stop the server (Ctrl+C), then start again
+
+# 4. Fetch the task — it still exists
+curl http://localhost:8000/tasks/1
+```
+
+### Docker (PostgreSQL)
 
 ```bash
 # 1. Start the stack
@@ -120,68 +222,20 @@ curl -X POST http://localhost:8000/tasks \
   -H "Content-Type: application/json" \
   -d '{"title": "persistent task", "done": false}'
 
-# 3. Note the returned ID (e.g. 1)
-
-# 4. Stop everything
+# 3. Stop everything
 docker compose down
 
-# 5. Start again
+# 4. Start again
 docker compose up
 
-# 6. Fetch the task — it still exists
+# 5. Fetch the task — it still exists
 curl http://localhost:8000/tasks/1
-# → {"id":1,"title":"persistent task","done":false,...}
 ```
 
-The volume `pgdata` in `docker-compose.yml` ensures Postgres data persists across container restarts.
+The volume `pgdata` in `docker-compose.yml` ensures PostgreSQL data persists across container restarts.
 
-### Redis connectivity (Stretch Goal)
+## Known Limitations
 
-Redis was added as the optional Stretch Goal. It runs as a `redis:7-alpine` service in `docker-compose.yml` with a health check.
-
-Verification:
-- On startup, the app pings Redis (`PONG`) and logs the result.
-- The `/health` and `/` endpoints include `"redis": "connected"` when the connection is alive.
-- The app continues to function normally if Redis is unavailable — it only reports the status.
-
-### EXPLAIN ANALYZE — index performance
-
-Run the seed script against the running stack:
-
-```bash
-# Ensure the stack is up, then:
-pip install -r requirements.txt
-python scripts/seed_explain.py --rows 10000
-```
-
-Example output (actual values will vary):
-
-```
-=== BEFORE INDEX ===
-Seq Scan on tasks  (cost=0.00..180.00 rows=5000 width=68)
-  Filter: (done = true)
-  Planning Time: 0.123 ms
-  Execution Time: 15.234 ms
-
-=== AFTER INDEX ===
-Bitmap Heap Scan on tasks  (cost=4.52..125.34 rows=5000 width=68)
-  Recheck Cond: (done = true)
-  ->  Bitmap Index Scan on idx_tasks_done  (cost=0.00..4.52 rows=5000 width=0)
-        Index Cond: (done = true)
-  Planning Time: 0.234 ms
-  Execution Time: 2.456 ms
-```
-
-The index on `tasks(done)` replaces a sequential scan with a bitmap index scan, reducing execution time significantly on a 10,000-row table.
-
-### Assignment requirements checklist
-
-- [x] Postgres runs in Docker with a volume
-- [x] Whole stack starts with `docker compose up`
-- [x] Connection string from `.env` (`DATABASE_URL`), gitignored; `.env.example` committed
-- [x] Postgres repository replaced in-memory one — service and routes unchanged (async routes only)
-- [x] Persistence proven across app + container restart
-- [x] Redis in compose file, pinged from app on startup
-- [x] Index on `tasks(done)` with `EXPLAIN ANALYZE` before/after
-- [x] `.dockerignore` excludes unnecessary files from Docker build context
-- [x] `TaskRepository` Protocol defines the repository contract explicitly
+- No authentication — all endpoints are public
+- SQLite used in single-connection mode (not suitable for high concurrency)
+- No scraping functionality
