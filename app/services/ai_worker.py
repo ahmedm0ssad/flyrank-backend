@@ -1,83 +1,65 @@
 import logging
-import os
-from datetime import datetime, timezone
 
-import redis
 from rq import get_current_job
 
+from app.models.job import JobStatus
+from app.queue import update_job
 from app.services.ai_service import call_ai
 from app.services.alert import send_alert
 
 logger = logging.getLogger(__name__)
 
-_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+def _now() -> str:
+    from datetime import datetime, timezone
 
-def _get_redis():
-    return redis.from_url(_REDIS_URL, decode_responses=True, protocol=2)
+    return datetime.now(timezone.utc).isoformat()
 
 
 def run_ai_job(payload: dict) -> str:
     job = get_current_job()
     job_id = job.id
-    r = _get_redis()
 
-    key = f"job:{job_id}"
-    r.hset(key, mapping={"status": "processing", "updated_at": _now()})
+    logger.info("Job %s started", job_id)
+    update_job(job_id, JobStatus.STARTED.value, started_at=_now())
 
     try:
         result = call_ai(payload)
 
-        r.hset(
-            key,
-            mapping={
-                "status": "completed",
-                "result": result,
-                "updated_at": _now(),
-            },
+        logger.info("Job %s completed successfully", job_id)
+        update_job(
+            job_id,
+            JobStatus.FINISHED.value,
+            result=result,
+            finished_at=_now(),
         )
-        r.expire(key, 86400)
+
         return result
 
     except Exception as exc:
-        attempts = r.hincrby(key, "attempts", 1)
-        r.hset(key, "last_error", str(exc))
-        r.hset(key, "updated_at", _now())
+        attempts = int(job.meta.get("current_attempt", 0)) + 1
+        job.meta["current_attempt"] = attempts
+        job.save_meta()
 
-        if job and job.retries_left is not None and job.retries_left > 0:
-            r.hset(key, "status", "queued")
-            logger.warning(
-                "Job %s failed (attempt %d/%d): %s. Retrying.",
-                job_id,
-                attempts,
-                job.meta.get("max_retries", 3) + 1,
-                exc,
-            )
+        logger.warning(
+            "Job %s failed (attempt %d/%d): %s",
+            job_id,
+            attempts,
+            job.meta.get("max_retries", 3) + 1,
+            exc,
+        )
+
+        if job.retries_left is not None and job.retries_left > 0:
+            update_job(job_id, JobStatus.QUEUED.value)
+            logger.info("Job %s requeued for retry (attempt %d)", job_id, attempts)
         else:
-            r.hset(key, "status", "failed")
-            r.hset(key, "error", str(exc))
-            r.expire(key, 86400)
-
-            payload_summary = {k: v for k, v in payload.items() if k != "prompt"}
-            if "prompt" in payload:
-                prompt = payload["prompt"]
-                payload_summary["prompt_preview"] = (
-                    prompt[:80] + "..." if len(prompt) > 80 else prompt
-                )
-
-            logger.error(
-                "Job %s failed after all retries. Payload: %s. Error: %s",
+            update_job(
                 job_id,
-                payload_summary,
-                exc,
+                JobStatus.FAILED.value,
+                error=str(exc),
+                finished_at=_now(),
             )
-            send_alert(
-                f"AI job {job_id} failed permanently. "
-                f"Payload: {payload_summary}. Error: {exc}"
-            )
+            logger.error("Job %s failed after all retries: %s", job_id, exc)
+            send_alert(f"AI job {job_id} failed permanently: {exc}")
 
         raise
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
