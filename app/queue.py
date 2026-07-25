@@ -65,7 +65,7 @@ def create_job(
     retry = Retry(max=3, interval=[10, 60, 300])
     queue = get_queue()
     queue.enqueue(
-        "app.services.ai_worker:run_ai_job",
+        "app.services.ai_worker.run_ai_job",
         payload,
         job_id=job_id,
         retry=retry,

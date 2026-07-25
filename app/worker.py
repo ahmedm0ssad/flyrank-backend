@@ -20,7 +20,7 @@ def run_worker():
     logger.info("Connecting to Redis at %s", redis_url)
 
     try:
-        connection = redis.from_url(redis_url, decode_responses=True, protocol=2)
+        connection = redis.from_url(redis_url, protocol=2)
         connection.ping()
         logger.info("Redis connection established")
     except redis.RedisError as e:

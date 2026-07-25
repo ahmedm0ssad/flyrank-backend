@@ -12,7 +12,7 @@ class JobStatus(str, Enum):
 
 class JobCreate(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=10000)
-    model: str = "llama3-8b-8192"
+    model: str = "llama-3.1-8b-instant"
 
 
 class JobEnqueueResponse(BaseModel):

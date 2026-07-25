@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def call_ai(payload: dict) -> str:
     prompt = payload.get("prompt", "Tell me something interesting.")
-    model = payload.get("model", "llama3-8b-8192")
+    model = payload.get("model", "llama-3.1-8b-instant")
 
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:

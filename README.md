@@ -33,7 +33,7 @@ Add an asynchronous background job system for AI inference using Redis Queue, wi
 | Database        | SQLite (default) / PostgreSQL 16  |
 | DB Driver       | asyncpg / sqlite3 (stdlib)        |
 | Cache / Queue   | Redis 7 + RQ                      |
-| LLM Client      | Groq SDK (llama3-8b-8192)         |
+| LLM Client      | Groq SDK (llama-3.1-8b-instant)   |
 | Scraping        | requests + BeautifulSoup4 + lxml  |
 | Container       | Docker + Docker Compose           |
 | Linting         | Ruff, Black, isort                |
