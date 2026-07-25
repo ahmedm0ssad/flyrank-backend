@@ -1,7 +1,5 @@
-import json
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 

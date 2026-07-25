@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.task import TaskCreate, TaskUpdate, TaskResponse
+from app.models.task import TaskCreate, TaskResponse, TaskUpdate
 
 
 class TestTaskCreate:
@@ -89,7 +89,6 @@ class TestTaskResponse:
             )
 
     def test_missing_required_fields(self):
-        from datetime import datetime
 
         with pytest.raises(ValidationError):
             TaskResponse(title="Test", done=False)
@@ -98,7 +97,5 @@ class TestTaskResponse:
         from datetime import datetime
 
         now = datetime.now()
-        data = TaskResponse(
-            id=1, title="Test", done=1, created_at=now, updated_at=now
-        )
+        data = TaskResponse(id=1, title="Test", done=1, created_at=now, updated_at=now)
         assert data.done is True

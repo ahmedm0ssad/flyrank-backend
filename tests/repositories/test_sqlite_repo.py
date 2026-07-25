@@ -92,15 +92,11 @@ class TestSqliteRepository:
 
     async def test_update_task_does_not_change_created_at(self, repo):
         original = await repo.get_task(1)
-        updated = await repo.update_task(
-            1, TaskUpdate(title="Still same", done=True)
-        )
+        updated = await repo.update_task(1, TaskUpdate(title="Still same", done=True))
         assert updated.created_at == original.created_at
 
     async def test_update_task_returns_none_for_missing(self, repo):
-        result = await repo.update_task(
-            999, TaskUpdate(title="Nope", done=False)
-        )
+        result = await repo.update_task(999, TaskUpdate(title="Nope", done=False))
         assert result is None
 
     async def test_delete_task_returns_true(self, repo):

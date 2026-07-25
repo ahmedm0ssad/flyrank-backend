@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from app.models.scraped_book import ScrapedBookCreate
 
@@ -15,7 +15,7 @@ RATING_MAP = {
 }
 
 
-def _clean_price(raw: str) -> Optional[float]:
+def _clean_price(raw: str) -> float | None:
     if not raw:
         return None
     cleaned = re.sub(r"[^\d.]", "", raw)
@@ -25,13 +25,13 @@ def _clean_price(raw: str) -> Optional[float]:
         return None
 
 
-def _clean_rating(raw: str) -> Optional[int]:
+def _clean_rating(raw: str) -> int | None:
     if not raw:
         return None
     return RATING_MAP.get(raw.strip().lower())
 
 
-def _clean_availability(raw: str) -> Optional[str]:
+def _clean_availability(raw: str) -> str | None:
     if not raw:
         return None
     cleaned = re.sub(r"\s+", " ", raw).strip()
@@ -42,7 +42,7 @@ def _clean_availability(raw: str) -> Optional[str]:
     return None
 
 
-def clean_book(raw: dict[str, Any]) -> Optional[ScrapedBookCreate]:
+def clean_book(raw: dict[str, Any]) -> ScrapedBookCreate | None:
     url = raw.get("url", "").strip()
     title = raw.get("title", "").strip()
 

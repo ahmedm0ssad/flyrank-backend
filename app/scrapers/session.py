@@ -1,7 +1,6 @@
 import logging
 import re
 import time
-from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -10,7 +9,9 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "FlyRankBot/1.0 (Educational Project; +https://github.com/flyrank/backend-ai)"
+USER_AGENT = (
+    "FlyRankBot/1.0 (Educational Project; +https://github.com/flyrank/backend-ai)"
+)
 DEFAULT_TIMEOUT = 10
 DEFAULT_DELAY = 1.0
 MAX_RETRIES = 5
@@ -32,9 +33,13 @@ class RobotsChecker:
                 self._parse(resp.text)
                 logger.info("Loaded robots.txt from %s", robots_url)
             else:
-                logger.info("No robots.txt at %s (status %s)", robots_url, resp.status_code)
+                logger.info(
+                    "No robots.txt at %s (status %s)", robots_url, resp.status_code
+                )
         except requests.RequestException:
-            logger.warning("Failed to fetch robots.txt from %s — allowing all", robots_url)
+            logger.warning(
+                "Failed to fetch robots.txt from %s — allowing all", robots_url
+            )
         self._loaded = True
 
     def _parse(self, text: str) -> None:
@@ -91,7 +96,7 @@ class ScrapeSession:
         self._delay = max(delay, self._robots.crawl_delay)
         self._last_request_time: float = 0
 
-    def fetch(self, url: str) -> Optional[str]:
+    def fetch(self, url: str) -> str | None:
         if not self._robots.is_allowed(url):
             logger.warning("Blocked by robots.txt: %s", url)
             return None

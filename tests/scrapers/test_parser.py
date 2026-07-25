@@ -1,4 +1,3 @@
-import pytest
 
 from app.scrapers.parser import (
     extract_next_page_url,
@@ -63,70 +62,100 @@ NO_NEXT_HTML = "<html><body></body></html>"
 
 class TestParseListingPage:
     def test_returns_list_of_books(self):
-        results = parse_listing_page(LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert len(results) == 2
 
     def test_parses_book_url(self):
-        results = parse_listing_page(LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert "a-light_1000" in results[0]["url"]
         assert "tipping_1001" in results[1]["url"]
 
     def test_parses_title(self):
-        results = parse_listing_page(LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert results[0]["title"] == "A Light in the Attic"
         assert results[1]["title"] == "Tipping the Velvet"
 
     def test_parses_rating_raw(self):
-        results = parse_listing_page(LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert results[0]["rating_raw"] == "three"
         assert results[1]["rating_raw"] == "one"
 
     def test_parses_price_raw(self):
-        results = parse_listing_page(LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert "£51.77" in results[0]["price_raw"]
         assert "£53.74" in results[1]["price_raw"]
 
     def test_parses_availability_raw(self):
-        results = parse_listing_page(LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert results[0]["availability_raw"] == "In stock"
 
     def test_empty_html_returns_empty_list(self):
-        results = parse_listing_page(EMPTY_LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html")
+        results = parse_listing_page(
+            EMPTY_LISTING_HTML, "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert results == []
 
 
 class TestParseDetailPage:
     def test_parses_title(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert result["title"] == "A Light in the Attic"
 
     def test_parses_upc(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert result["upc"] == "a897fe39b8b8d634"
 
     def test_parses_price_raw(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert "£51.77" in result.get("price_raw", "")
 
     def test_parses_availability_raw(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert "In stock" in result.get("availability_raw", "")
 
     def test_parses_description(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert result["description"] == "This is a test description for the book."
 
     def test_parses_category(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert result["category"] == "Poetry"
 
     def test_parses_image_url(self):
-        result = parse_detail_page(DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html")
+        result = parse_detail_page(
+            DETAIL_HTML, "http://books.toscrape.com/catalogue/a-light_1000/index.html"
+        )
         assert result["image_url"] is not None
         assert ".jpg" in result["image_url"]
 
     def test_no_table_returns_defaults(self):
-        result = parse_detail_page(DETAIL_NO_TABLE_HTML, "http://books.toscrape.com/catalogue/test/index.html")
+        result = parse_detail_page(
+            DETAIL_NO_TABLE_HTML, "http://books.toscrape.com/catalogue/test/index.html"
+        )
         assert result["title"] == "No Table Book"
         assert result["upc"] is None
         assert result["description"] is None
@@ -149,5 +178,7 @@ class TestExtractNextPageUrl:
         assert result is None
 
     def test_returns_none_for_empty_html(self):
-        result = extract_next_page_url("", "http://books.toscrape.com/catalogue/page-1.html")
+        result = extract_next_page_url(
+            "", "http://books.toscrape.com/catalogue/page-1.html"
+        )
         assert result is None

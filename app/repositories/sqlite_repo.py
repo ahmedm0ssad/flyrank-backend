@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import datetime, timezone
-from typing import Optional
 
 from starlette.concurrency import run_in_threadpool
 
@@ -15,8 +14,7 @@ class SqliteRepository:
     def _init_db(self):
         conn = sqlite3.connect(self.db_path)
         try:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
@@ -24,8 +22,7 @@ class SqliteRepository:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
-                """
-            )
+                """)
             count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
             if count == 0:
                 now = datetime.now(timezone.utc).isoformat()
@@ -77,8 +74,8 @@ class SqliteRepository:
 
     async def get_all_tasks(
         self,
-        search: Optional[str] = None,
-        done: Optional[bool] = None,
+        search: str | None = None,
+        done: bool | None = None,
     ) -> list[TaskResponse]:
         def _work():
             conn = self._connect()
@@ -99,7 +96,7 @@ class SqliteRepository:
 
         return await run_in_threadpool(_work)
 
-    async def get_task(self, task_id: int) -> Optional[TaskResponse]:
+    async def get_task(self, task_id: int) -> TaskResponse | None:
         def _work():
             conn = self._connect()
             try:
@@ -117,7 +114,7 @@ class SqliteRepository:
 
     async def update_task(
         self, task_id: int, task_data: TaskUpdate
-    ) -> Optional[TaskResponse]:
+    ) -> TaskResponse | None:
         def _work():
             conn = self._connect()
             try:

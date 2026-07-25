@@ -26,7 +26,9 @@ def mock_pool_and_conn(mock_conn):
 @pytest.fixture(autouse=True)
 def patch_get_pool(mock_pool_and_conn):
     pool, _ = mock_pool_and_conn
-    with patch("app.repositories.postgres_repo.get_pool", new=AsyncMock(return_value=pool)):
+    with patch(
+        "app.repositories.postgres_repo.get_pool", new=AsyncMock(return_value=pool)
+    ):
         yield
 
 
@@ -36,10 +38,13 @@ from collections.abc import Mapping
 class _MockRecord(Mapping):
     def __init__(self, values: dict):
         self._values = values
+
     def __getitem__(self, key):
         return self._values[key]
+
     def __iter__(self):
         return iter(self._values.keys())
+
     def __len__(self):
         return len(self._values)
 
@@ -166,9 +171,7 @@ class TestPostgresRepository:
         )
         mock_conn.fetchrow.return_value = row
 
-        await PostgresRepository.create_task(
-            TaskCreate(title="Task", done=True)
-        )
+        await PostgresRepository.create_task(TaskCreate(title="Task", done=True))
 
         call_args = mock_conn.fetchrow.await_args
         assert call_args is not None

@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import uuid
@@ -30,6 +29,7 @@ IDEMPOTENCY_TTL = 86400
 
 def _get_queue():
     from redis import Redis
+
     conn = Redis.from_url(_REDIS_URL, decode_responses=True, protocol=2)
     return Queue("ai-jobs", connection=conn), conn
 
@@ -45,9 +45,6 @@ async def create_ai_job(
     if idempotency_key:
         existing_job_id = redis_conn.get(f"idempotency:{idempotency_key}")
         if existing_job_id:
-            job_key = f"job:{existing_job_id}"
-            job_data = redis_conn.hgetall(job_key)
-            status_val = job_data.get("status", "queued") if job_data else "queued"
             return JobResponse(
                 job_id=existing_job_id,
                 status_url=f"/jobs/{existing_job_id}",

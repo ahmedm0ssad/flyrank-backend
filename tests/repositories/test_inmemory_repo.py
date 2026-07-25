@@ -63,9 +63,7 @@ class TestInMemoryRepository:
         assert updated.updated_at > original.updated_at
 
     async def test_update_task_returns_none_for_missing(self, repo):
-        result = await repo.update_task(
-            999, TaskUpdate(title="Nope", done=False)
-        )
+        result = await repo.update_task(999, TaskUpdate(title="Nope", done=False))
         assert result is None
 
     async def test_delete_task_returns_true(self, repo):

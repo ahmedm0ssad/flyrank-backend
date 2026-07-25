@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
@@ -54,13 +53,15 @@ def parse_listing_page(html: str, page_url: str) -> list[dict]:
         if isinstance(avail_tag, Tag):
             availability_raw = avail_tag.get_text(strip=True)
 
-        books.append({
-            "url": book_url,
-            "title": title,
-            "rating_raw": rating_raw,
-            "price_raw": price_raw,
-            "availability_raw": availability_raw,
-        })
+        books.append(
+            {
+                "url": book_url,
+                "title": title,
+                "rating_raw": rating_raw,
+                "price_raw": price_raw,
+                "availability_raw": availability_raw,
+            }
+        )
 
     return books
 
@@ -118,7 +119,7 @@ def parse_detail_page(html: str, page_url: str) -> dict:
     return result
 
 
-def extract_next_page_url(html: str, page_url: str) -> Optional[str]:
+def extract_next_page_url(html: str, page_url: str) -> str | None:
     soup = BeautifulSoup(html, "lxml")
     li = soup.find("li", class_="next")
     if isinstance(li, Tag):

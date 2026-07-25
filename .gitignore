@@ -10,3 +10,5 @@ screenshots/
 docs/
 .env.bak
 server.log
+AUDIT_REPORT.md
+VALIDATION_REPORT.md

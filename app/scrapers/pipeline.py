@@ -1,6 +1,4 @@
 import logging
-import time
-from typing import Optional
 
 from app.scrapers.cleaner import clean_book, merge_listing_and_detail
 from app.scrapers.parser import (
@@ -20,7 +18,7 @@ def run(
     max_pages: int = 5,
     base_url: str = BASE_URL,
     start_url: str = START_URL,
-    session: Optional[ScrapeSession] = None,
+    session: ScrapeSession | None = None,
 ) -> tuple[list[dict], list[str]]:
     own_session = session is None
     if session is None:
@@ -28,7 +26,7 @@ def run(
 
     books: list[dict] = []
     errors: list[str] = []
-    current_url: Optional[str] = start_url
+    current_url: str | None = start_url
     page_count = 0
 
     try:

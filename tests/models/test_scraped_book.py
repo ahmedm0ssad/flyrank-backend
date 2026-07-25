@@ -3,8 +3,8 @@ from pydantic import ValidationError
 
 from app.models.scraped_book import (
     ScrapedBookCreate,
-    ScrapedBookUpdate,
     ScrapedBookResponse,
+    ScrapedBookUpdate,
 )
 
 
@@ -53,9 +53,7 @@ class TestScrapedBookCreate:
         assert data.price is None
 
     def test_rating_out_of_range_accepted(self):
-        data = ScrapedBookCreate(
-            url="http://example.com/book", title="Book", rating=10
-        )
+        data = ScrapedBookCreate(url="http://example.com/book", title="Book", rating=10)
         assert data.rating == 10
 
 

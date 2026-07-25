@@ -53,7 +53,8 @@ def mock_supabase(monkeypatch):
 class TestSignup:
     def test_signup_success(self, client: TestClient, mock_supabase):
         response = client.post(
-            "/auth/signup", json={"email": "test@example.com", "password": "password123"}
+            "/auth/signup",
+            json={"email": "test@example.com", "password": "password123"},
         )
 
         assert response.status_code == 201
@@ -71,7 +72,8 @@ class TestSignup:
     def test_signup_supabase_error(self, client: TestClient, mock_supabase):
         mock_supabase.sign_up.side_effect = Exception("User already registered")
         response = client.post(
-            "/auth/signup", json={"email": "existing@example.com", "password": "password123"}
+            "/auth/signup",
+            json={"email": "existing@example.com", "password": "password123"},
         )
 
         assert response.status_code == 400

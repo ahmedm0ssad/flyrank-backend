@@ -38,10 +38,13 @@ from collections.abc import Mapping
 class _MockRecord(Mapping):
     def __init__(self, values: dict):
         self._values = values
+
     def __getitem__(self, key):
         return self._values[key]
+
     def __iter__(self):
         return iter(self._values.keys())
+
     def __len__(self):
         return len(self._values)
 

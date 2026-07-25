@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -58,7 +57,9 @@ class TestValidationErrorHandler:
 
 
 class TestHTTPExceptionHandler:
-    def test_http_exception_returns_proper_status(self, client: TestClient, monkeypatch):
+    def test_http_exception_returns_proper_status(
+        self, client: TestClient, monkeypatch
+    ):
         mock_service = AsyncMock()
         mock_service.get_task.return_value = None
         monkeypatch.setattr("app.routers.tasks.task_service", mock_service)

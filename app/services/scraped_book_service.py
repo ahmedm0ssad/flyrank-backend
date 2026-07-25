@@ -37,7 +37,9 @@ if is_postgres_enabled():
             "errors": errors,
             "duration_seconds": duration,
         }
+
 else:
+
     async def start_scrape(max_pages: int = 5) -> dict:
         return {
             "books_scraped": 0,

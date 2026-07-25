@@ -1,4 +1,3 @@
-import pytest
 
 from app.models.scraped_book import ScrapedBookCreate
 from app.scrapers.cleaner import (
@@ -149,7 +148,11 @@ class TestCleanBook:
 
 class TestMergeListingAndDetail:
     def test_detail_overrides_listing(self):
-        listing = {"url": "http://example.com/1", "title": "Listing Title", "price_raw": "£10"}
+        listing = {
+            "url": "http://example.com/1",
+            "title": "Listing Title",
+            "price_raw": "£10",
+        }
         detail = {"title": "Detail Title", "description": "A desc"}
         merged = merge_listing_and_detail(listing, detail)
         assert merged["url"] == "http://example.com/1"
@@ -158,7 +161,11 @@ class TestMergeListingAndDetail:
         assert merged["description"] == "A desc"
 
     def test_none_values_in_detail_do_not_override(self):
-        listing = {"url": "http://example.com/1", "title": "Listing", "price_raw": "£10"}
+        listing = {
+            "url": "http://example.com/1",
+            "title": "Listing",
+            "price_raw": "£10",
+        }
         detail = {"title": None, "price_raw": None}
         merged = merge_listing_and_detail(listing, detail)
         assert merged["title"] == "Listing"

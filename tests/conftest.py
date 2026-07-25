@@ -5,8 +5,6 @@ os.environ["REDIS_URL"] = ""
 os.environ["SUPABASE_URL"] = "https://test.supabase.co"
 os.environ["SUPABASE_KEY"] = "test-anon-key"
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,9 +16,7 @@ from app.main import app
 def _no_postgres(monkeypatch):
     monkeypatch.setattr("app.main.is_postgres_enabled", lambda: False)
     monkeypatch.setattr("app.database.is_postgres_enabled", lambda: False)
-    monkeypatch.setattr(
-        "app.services.task_service.is_postgres_enabled", lambda: False
-    )
+    monkeypatch.setattr("app.services.task_service.is_postgres_enabled", lambda: False)
     monkeypatch.setattr(
         "app.services.scraped_book_service.is_postgres_enabled", lambda: False
     )
@@ -49,4 +45,3 @@ def sample_book_data() -> dict:
 @pytest.fixture
 def sample_task_data() -> dict:
     return {"title": "Test Task", "done": False}
-

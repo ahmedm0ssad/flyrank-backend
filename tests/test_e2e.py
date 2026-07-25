@@ -1,9 +1,8 @@
 import os
 import time
 
-from dotenv import load_dotenv
-
 import requests
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -52,7 +51,9 @@ def test_1_signup_new_user():
     r = requests.post(_url("/auth/signup"), json={"email": email, "password": pw})
     print(f"\n[SIGNUP NEW] status={r.status_code} body={r.text}")
     if r.status_code == 400 and "rate limit" in r.text:
-        print("  WARNING: Supabase rate limited signup. Will use admin-seeded account instead.")
+        print(
+            "  WARNING: Supabase rate limited signup. Will use admin-seeded account instead."
+        )
         _state["signup_rate_limited"] = True
     else:
         assert r.status_code == 201, f"Expected 201, got {r.status_code}: {r.text}"
@@ -63,9 +64,10 @@ def test_1_signup_new_user():
 
 
 def test_2_signup_duplicate_email():
-    r = requests.post(_url("/auth/signup"), json={
-        "email": _state["email"], "password": _state["password"]
-    })
+    r = requests.post(
+        _url("/auth/signup"),
+        json={"email": _state["email"], "password": _state["password"]},
+    )
     print(f"\n[SIGNUP DUPE] status={r.status_code} body={r.text}")
     assert r.status_code == 400, f"Expected 400, got {r.status_code}: {r.text}"
     assert "error" in r.json()
@@ -90,9 +92,10 @@ def test_3_login_correct():
 
 
 def test_4_login_wrong_password():
-    r = requests.post(_url("/auth/login"), json={
-        "email": _state["email"], "password": "DefinitelyWrong!!"
-    })
+    r = requests.post(
+        _url("/auth/login"),
+        json={"email": _state["email"], "password": "DefinitelyWrong!!"},
+    )
     print(f"\n[LOGIN BAD PW] status={r.status_code} body={r.text}")
     assert r.status_code == 401, f"Expected 401, got {r.status_code}: {r.text}"
     assert r.json() == {"error": "Invalid login credentials"}
@@ -166,6 +169,8 @@ def test_11_profile_after_logout():
         headers={"Authorization": f"Bearer {_state['access_token']}"},
     )
     print(f"\n[PROFILE AFTER LOGOUT] status={r.status_code} body={r.text}")
-    print(f"NOTE: After logout, Supabase returned status {r.status_code}. "
-          f"JWTs are stateless; Supabase's get_user() may still validate "
-          f"the token until it expires.")
+    print(
+        f"NOTE: After logout, Supabase returned status {r.status_code}. "
+        f"JWTs are stateless; Supabase's get_user() may still validate "
+        f"the token until it expires."
+    )

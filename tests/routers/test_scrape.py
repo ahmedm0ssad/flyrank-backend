@@ -43,7 +43,12 @@ class TestTriggerScrape:
 
         async def capture(max_pages: int = 5):
             captured["max_pages"] = max_pages
-            return {"books_scraped": 0, "books_saved": 0, "errors": [], "duration_seconds": 0}
+            return {
+                "books_scraped": 0,
+                "books_saved": 0,
+                "errors": [],
+                "duration_seconds": 0,
+            }
 
         mock_module = types.ModuleType("scraped_book_service")
         mock_module.start_scrape = capture
@@ -57,7 +62,12 @@ class TestTriggerScrape:
 
         async def capture(max_pages: int = 5):
             captured["max_pages"] = max_pages
-            return {"books_scraped": 0, "books_saved": 0, "errors": [], "duration_seconds": 0}
+            return {
+                "books_scraped": 0,
+                "books_saved": 0,
+                "errors": [],
+                "duration_seconds": 0,
+            }
 
         mock_module = types.ModuleType("scraped_book_service")
         mock_module.start_scrape = capture

@@ -1,6 +1,6 @@
-from typing import Optional, Protocol
+from typing import Protocol
 
-from app.models.task import TaskCreate, TaskUpdate, TaskResponse
+from app.models.task import TaskCreate, TaskResponse, TaskUpdate
 
 
 class TaskRepository(Protocol):
@@ -8,15 +8,15 @@ class TaskRepository(Protocol):
 
     async def get_all_tasks(
         self,
-        search: Optional[str] = None,
-        done: Optional[bool] = None,
+        search: str | None = None,
+        done: bool | None = None,
     ) -> list[TaskResponse]: ...
 
-    async def get_task(self, task_id: int) -> Optional[TaskResponse]: ...
+    async def get_task(self, task_id: int) -> TaskResponse | None: ...
 
     async def update_task(
         self, task_id: int, task_data: TaskUpdate
-    ) -> Optional[TaskResponse]: ...
+    ) -> TaskResponse | None: ...
 
     async def delete_task(self, task_id: int) -> bool: ...
 

@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from typing import Optional
 
 from app.database import get_pool
 from app.models.scraped_book import ScrapedBookCreate, ScrapedBookResponse
@@ -86,7 +85,7 @@ class ScrapedBookRepository:
         return [ScrapedBookResponse(**dict(r)) for r in rows]
 
     @staticmethod
-    async def get_book_by_id(book_id: int) -> Optional[ScrapedBookResponse]:
+    async def get_book_by_id(book_id: int) -> ScrapedBookResponse | None:
         pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(

@@ -1,7 +1,8 @@
 import asyncio
 import os
-from dotenv import load_dotenv
+
 import asyncpg
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -15,9 +16,7 @@ async def get_pool() -> asyncpg.Pool:
         last_error = None
         for attempt in range(1, 6):
             try:
-                _pool = await asyncpg.create_pool(
-                    DATABASE_URL, min_size=2, max_size=10
-                )
+                _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
                 break
             except Exception as e:
                 last_error = e

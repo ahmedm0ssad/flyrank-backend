@@ -108,9 +108,7 @@ class TestUpdateTask:
             1, "Updated", done=True
         )
 
-        response = client.put(
-            "/tasks/1", json={"title": "Updated", "done": True}
-        )
+        response = client.put("/tasks/1", json={"title": "Updated", "done": True})
 
         assert response.status_code == 200
         data = response.json()
@@ -120,9 +118,7 @@ class TestUpdateTask:
     def test_update_task_not_found(self, client: TestClient, mock_task_service):
         mock_task_service.update_task.return_value = None
 
-        response = client.put(
-            "/tasks/999", json={"title": "Nope", "done": False}
-        )
+        response = client.put("/tasks/999", json={"title": "Nope", "done": False})
 
         assert response.status_code == 404
         assert "999" in response.json()["error"]
@@ -139,7 +135,9 @@ class TestUpdateTask:
 class TestGetStats:
     def test_stats_returns_shape(self, client, mock_task_service):
         mock_task_service.get_stats.return_value = {
-            "total": 5, "done": 2, "not_done": 3,
+            "total": 5,
+            "done": 2,
+            "not_done": 3,
         }
         response = client.get("/stats")
         assert response.status_code == 200

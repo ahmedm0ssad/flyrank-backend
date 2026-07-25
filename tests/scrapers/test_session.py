@@ -1,9 +1,8 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 
-from app.scrapers.session import RobotsChecker, ScrapeSession, USER_AGENT, DEFAULT_DELAY
+from app.scrapers.session import DEFAULT_DELAY, RobotsChecker, ScrapeSession
 
 
 class TestRobotsChecker:
@@ -110,14 +109,13 @@ class TestScrapeSession:
             session.close()
 
     def test_init_uses_robots_crawl_delay(self):
-        with patch("app.scrapers.session.RobotsChecker.load"):
-            with patch(
-                "app.scrapers.session.RobotsChecker.crawl_delay",
-                new_callable=lambda: 5.0,
-            ):
-                session = ScrapeSession("http://example.com")
-                assert session._delay == 5.0
-                session.close()
+        with patch("app.scrapers.session.RobotsChecker.load"), patch(
+            "app.scrapers.session.RobotsChecker.crawl_delay",
+            new_callable=lambda: 5.0,
+        ):
+            session = ScrapeSession("http://example.com")
+            assert session._delay == 5.0
+            session.close()
 
     def test_fetch_blocked_by_robots(self):
         with patch("app.scrapers.session.RobotsChecker.load"):
@@ -215,7 +213,9 @@ class TestScrapeSession:
             session = ScrapeSession("http://example.com")
             session._robots.is_allowed = MagicMock(return_value=True)
             mock_resp = MagicMock()
-            mock_resp.raise_for_status.side_effect = requests.RequestException("HTTP Error")
+            mock_resp.raise_for_status.side_effect = requests.RequestException(
+                "HTTP Error"
+            )
             session._session.get = MagicMock(return_value=mock_resp)
 
             result = session.fetch("http://example.com/page")

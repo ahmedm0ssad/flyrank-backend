@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
-from typing import Optional
 
-from app.models.task import TaskCreate, TaskUpdate, TaskResponse
+from app.models.task import TaskCreate, TaskResponse, TaskUpdate
 
 
 class InMemoryRepository:
@@ -42,7 +41,7 @@ class InMemoryRepository:
         return TaskResponse(**task)
 
     async def get_all_tasks(
-        self, search: Optional[str] = None, done: Optional[bool] = None
+        self, search: str | None = None, done: bool | None = None
     ) -> list[TaskResponse]:
         tasks = list(self._tasks.values())
         if search is not None:
@@ -52,7 +51,7 @@ class InMemoryRepository:
         tasks.sort(key=lambda t: t["title"])
         return [TaskResponse(**t) for t in tasks]
 
-    async def get_task(self, task_id: int) -> Optional[TaskResponse]:
+    async def get_task(self, task_id: int) -> TaskResponse | None:
         task = self._tasks.get(task_id)
         if task is None:
             return None
@@ -60,7 +59,7 @@ class InMemoryRepository:
 
     async def update_task(
         self, task_id: int, task_data: TaskUpdate
-    ) -> Optional[TaskResponse]:
+    ) -> TaskResponse | None:
         task = self._tasks.get(task_id)
         if task is None:
             return None

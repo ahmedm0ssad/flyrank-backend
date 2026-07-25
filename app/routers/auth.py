@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-
 from supabase import create_async_client
 
 from app.dependencies.auth import bearer_scheme, get_current_user
@@ -80,4 +79,3 @@ async def logout(current_user: dict = Depends(get_current_user)):
     scoped_client = await create_async_client(url, key)
     await scoped_client.auth.set_session(current_user["access_token"], "")
     await scoped_client.auth.sign_out()
-    return None
