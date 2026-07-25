@@ -1,4 +1,3 @@
-
 import pytest
 
 from app.models.scraped_book import ScrapedBookCreate

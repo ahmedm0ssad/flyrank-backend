@@ -57,9 +57,7 @@ class PostgresRepository:
         return TaskResponse(**dict(row))
 
     @staticmethod
-    async def update_task(
-        task_id: int, task_data: TaskUpdate
-    ) -> TaskResponse | None:
+    async def update_task(task_id: int, task_data: TaskUpdate) -> TaskResponse | None:
         pool = await get_pool()
         now = datetime.now(timezone.utc)
         async with pool.acquire() as conn:

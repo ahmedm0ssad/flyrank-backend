@@ -1,4 +1,3 @@
-
 from app.scrapers.parser import (
     extract_next_page_url,
     parse_detail_page,

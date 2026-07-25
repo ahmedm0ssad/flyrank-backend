@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from pydantic import ValidationError
 
@@ -64,9 +66,7 @@ class TestTaskUpdate:
 
 class TestTaskResponse:
     def test_valid_task_response(self):
-        from datetime import datetime
-
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         data = TaskResponse(
             id=1, title="Test", done=False, created_at=now, updated_at=now
         )
@@ -77,25 +77,21 @@ class TestTaskResponse:
         assert data.updated_at == now
 
     def test_id_must_be_int(self):
-        from datetime import datetime
-
+        now = datetime.now(timezone.utc)
         with pytest.raises(ValidationError):
             TaskResponse(
                 id="not_an_int",
                 title="Test",
                 done=False,
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
+                created_at=now,
+                updated_at=now,
             )
 
     def test_missing_required_fields(self):
-
         with pytest.raises(ValidationError):
             TaskResponse(title="Test", done=False)
 
     def test_done_coerced_from_int(self):
-        from datetime import datetime
-
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         data = TaskResponse(id=1, title="Test", done=1, created_at=now, updated_at=now)
         assert data.done is True

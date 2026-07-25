@@ -1,4 +1,3 @@
-
 from app.models.scraped_book import ScrapedBookCreate
 from app.scrapers.cleaner import (
     _clean_availability,

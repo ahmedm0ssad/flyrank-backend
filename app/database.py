@@ -18,7 +18,7 @@ async def get_pool() -> asyncpg.Pool:
             try:
                 _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
                 break
-            except Exception as e:
+            except asyncpg.PostgresError as e:
                 last_error = e
                 if attempt < 5:
                     await asyncio.sleep(2)

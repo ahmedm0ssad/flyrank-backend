@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from supabase import AuthApiError, AuthError
 
 
 def _make_user():
@@ -70,7 +71,9 @@ class TestSignup:
         assert response.status_code == 400
 
     def test_signup_supabase_error(self, client: TestClient, mock_supabase):
-        mock_supabase.sign_up.side_effect = Exception("User already registered")
+        mock_supabase.sign_up.side_effect = AuthApiError(
+            "User already registered", 400, "user_already_registered"
+        )
         response = client.post(
             "/auth/signup",
             json={"email": "existing@example.com", "password": "password123"},
@@ -95,8 +98,8 @@ class TestLogin:
         )
 
     def test_login_invalid_credentials(self, client: TestClient, mock_supabase):
-        mock_supabase.sign_in_with_password.side_effect = Exception(
-            "Invalid login credentials"
+        mock_supabase.sign_in_with_password.side_effect = AuthApiError(
+            "Invalid login credentials", 401, "invalid_credentials"
         )
         response = client.post(
             "/auth/login", json={"email": "wrong@example.com", "password": "wrong"}
@@ -106,7 +109,9 @@ class TestLogin:
         assert "Invalid login credentials" in response.json()["error"]
 
     def test_login_other_error(self, client: TestClient, mock_supabase):
-        mock_supabase.sign_in_with_password.side_effect = Exception("Some other error")
+        mock_supabase.sign_in_with_password.side_effect = AuthApiError(
+            "Some other error", 400, "unknown"
+        )
         response = client.post(
             "/auth/login", json={"email": "test@example.com", "password": "password123"}
         )
@@ -138,7 +143,7 @@ class TestProtected:
         assert "Access token required" in response.json()["error"]
 
     def test_profile_invalid_token(self, client: TestClient, mock_supabase):
-        mock_supabase.get_user.side_effect = Exception("Invalid token")
+        mock_supabase.get_user.side_effect = AuthError("Invalid token", "invalid_token")
         response = client.get(
             "/protected/profile", headers={"Authorization": "Bearer invalid-token"}
         )

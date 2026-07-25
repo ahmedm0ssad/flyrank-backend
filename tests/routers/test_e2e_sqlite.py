@@ -11,9 +11,9 @@ from app.services import task_service
 
 @pytest.fixture
 def _temp_sqlite_repo():
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    tmp.close()
-    repo = SqliteRepository(db_path=tmp.name)
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        tmp.close()
+        repo = SqliteRepository(db_path=tmp.name)
     original = task_service._repo
     task_service._repo = repo
     yield

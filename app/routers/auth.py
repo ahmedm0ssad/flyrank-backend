@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from supabase import create_async_client
+from supabase import AuthApiError, create_async_client
 
 from app.dependencies.auth import bearer_scheme, get_current_user
 from app.models.auth import AuthLogin, AuthSignup
@@ -23,7 +23,7 @@ async def signup(body: AuthSignup):
         return res.user
     except HTTPException:
         raise
-    except Exception as e:
+    except AuthApiError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -43,7 +43,7 @@ async def login(body: AuthLogin):
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except AuthApiError as e:
         msg = str(e)
         if "Invalid login credentials" in msg:
             raise HTTPException(

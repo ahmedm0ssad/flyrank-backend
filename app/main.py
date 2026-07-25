@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 
+import redis
 import redis.asyncio as redis_ai
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -20,7 +21,6 @@ _redis_client: redis_ai.Redis | None = None
 
 
 def get_redis() -> redis_ai.Redis | None:
-    global _redis_client
     return _redis_client
 
 
@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
         try:
             pong = await _redis_client.ping()
             print(f"Redis ping: {pong}")
-        except Exception as e:
+        except redis.RedisError as e:
             print(f"Redis unavailable: {e}")
             _redis_client = None
     else:
