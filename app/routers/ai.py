@@ -7,7 +7,7 @@ from app.models.job import (
     JobEnqueueResponse,
     JobListResponse,
 )
-from app.queue import create_job, get_job, list_jobs
+from app.core.queue import create_job, get_job, list_jobs
 
 logger = logging.getLogger(__name__)
 

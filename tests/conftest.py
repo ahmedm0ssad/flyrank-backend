@@ -77,20 +77,20 @@ def _reset_queue(monkeypatch):
     _fake_redis._data.clear()
     _fake_redis._strings.clear()
     _fake_queue.enqueued_jobs.clear()
-    monkeypatch.setattr("app.queue.get_connection", lambda: _fake_redis)
-    monkeypatch.setattr("app.queue.get_queue", lambda: _fake_queue)
-    monkeypatch.setattr("app.queue.get_report_queue", lambda: _fake_queue)
+    monkeypatch.setattr("app.core.queue.get_connection", lambda: _fake_redis)
+    monkeypatch.setattr("app.core.queue.get_queue", lambda: _fake_queue)
+    monkeypatch.setattr("app.core.queue.get_report_queue", lambda: _fake_queue)
 
 
 @pytest.fixture(autouse=True)
 def _no_postgres(monkeypatch):
     monkeypatch.setattr("app.main.is_postgres_enabled", lambda: False)
-    monkeypatch.setattr("app.database.is_postgres_enabled", lambda: False)
+    monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: False)
     monkeypatch.setattr("app.services.task_service.is_postgres_enabled", lambda: False)
     monkeypatch.setattr(
         "app.services.scraped_book_service.is_postgres_enabled", lambda: False
     )
-    monkeypatch.setattr("app.widgets.service.is_postgres_enabled", lambda: False)
+    monkeypatch.setattr("app.services.widget_service.is_postgres_enabled", lambda: False)
 
 
 @pytest.fixture

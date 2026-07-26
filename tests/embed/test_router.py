@@ -57,7 +57,7 @@ class TestGetWidgetJs:
 
     @pytest.mark.asyncio
     async def test_widget_js_410(self, client, created_widget):
-        from app.widgets import service as widget_service
+        from app.services import widget_service
 
         widget_id = str(created_widget.id)
         await widget_service.delete_widget(widget_id, "11111111-1111-1111-1111-111111111111")

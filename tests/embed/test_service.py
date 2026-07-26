@@ -1,8 +1,8 @@
 import pytest
 
-from app.embed.dependencies import validate_origin
-from app.embed.service import generate_snippet, get_widget_config
-from app.widgets.models import WidgetCreate
+from app.dependencies.embed import validate_origin
+from app.services.embed_service import generate_snippet, get_widget_config
+from app.models.widget import WidgetCreate
 
 pytestmark = pytest.mark.usefixtures("mock_redis")
 
@@ -39,7 +39,7 @@ async def test_snippet_generation_with_version_param():
 
 @pytest.mark.asyncio
 async def test_origin_exact_match():
-    from app.widgets import service as widget_service
+    from app.services import widget_service
 
     data = WidgetCreate(
         name="Test",
@@ -57,7 +57,7 @@ async def test_origin_exact_match():
 
 @pytest.mark.asyncio
 async def test_origin_wildcard_match():
-    from app.widgets import service as widget_service
+    from app.services import widget_service
 
     data = WidgetCreate(
         name="Test",
@@ -84,7 +84,7 @@ async def test_origin_subdomain_suffix_bypass_rejected():
     allowed = "https://myshop.com"
     bypass_attempt = "https://myshop.com.evil.com"
 
-    from app.widgets import service as widget_service
+    from app.services import widget_service
 
     data = WidgetCreate(
         name="Test",
@@ -105,7 +105,7 @@ async def test_origin_subdomain_suffix_bypass_rejected():
 
 @pytest.mark.asyncio
 async def test_origin_missing_rejected():
-    from app.widgets import service as widget_service
+    from app.services import widget_service
 
     data = WidgetCreate(
         name="Test",
@@ -123,7 +123,7 @@ async def test_origin_missing_rejected():
 
 @pytest.mark.asyncio
 async def test_origin_wildcard_no_match_rejected():
-    from app.widgets import service as widget_service
+    from app.services import widget_service
 
     data = WidgetCreate(
         name="Test",

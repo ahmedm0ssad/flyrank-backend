@@ -1,4 +1,4 @@
-from app.embed.widget_js import generate_script_tag, render_widget_js
+from app.services.widget_js import generate_script_tag, render_widget_js
 
 
 class TestRenderWidgetJs:

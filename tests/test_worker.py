@@ -305,7 +305,7 @@ class TestAIWorkerIntegration:
 
 class TestWorkerEntryPoint:
     def test_run_worker_has_run_function(self):
-        from app.worker import run_worker
+        from app.core.worker import run_worker
 
         assert callable(run_worker)
 
@@ -318,6 +318,6 @@ class TestWorkerEntryPoint:
         monkeypatch.setattr("redis.from_url", mock_from_url)
         monkeypatch.setattr("sys.exit", lambda code: None)
 
-        from app.worker import run_worker
+        from app.core.worker import run_worker
 
         run_worker()

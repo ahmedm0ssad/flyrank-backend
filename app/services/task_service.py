@@ -1,4 +1,4 @@
-from app.database import is_postgres_enabled
+from app.core.database import is_postgres_enabled
 from app.models.task import TaskCreate, TaskResponse, TaskUpdate
 from app.repositories.protocol import TaskRepository
 

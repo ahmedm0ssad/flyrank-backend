@@ -7,7 +7,7 @@ from app.models.job import JobStatus
 
 class TestQueueModule:
     def test_get_connection_returns_singleton(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         queue_module._connection = None
         queue_module._queue = None
@@ -19,7 +19,7 @@ class TestQueueModule:
         queue_module.reset_connection()
 
     def test_get_queue_returns_singleton(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         queue_module._connection = None
         queue_module._queue = None
@@ -31,7 +31,7 @@ class TestQueueModule:
         queue_module.reset_connection()
 
     def test_reset_connection_clears_singletons(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         queue_module._connection = MagicMock()
         queue_module._queue = MagicMock()
@@ -41,14 +41,14 @@ class TestQueueModule:
         assert queue_module._queue is None
 
     def test_create_job_returns_job_id_and_status(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         job_id, status = queue_module.create_job({"prompt": "Hello"})
         assert job_id is not None
         assert status == JobStatus.QUEUED
 
     def test_create_job_stores_in_redis(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         job_id, _ = queue_module.create_job({"prompt": "Hello"})
@@ -57,7 +57,7 @@ class TestQueueModule:
         assert data["attempts"] == "0"
 
     def test_create_job_with_idempotency_key(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         job_id_1, _ = queue_module.create_job(
             {"prompt": "Hello"}, idempotency_key="key-1"
@@ -68,20 +68,20 @@ class TestQueueModule:
         assert job_id_1 == job_id_2
 
     def test_create_job_without_idempotency_key_different(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         job_id_1, _ = queue_module.create_job({"prompt": "Hello"})
         job_id_2, _ = queue_module.create_job({"prompt": "Hello"})
         assert job_id_1 != job_id_2
 
     def test_get_job_returns_none_for_missing(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         result = queue_module.get_job("nonexistent")
         assert result is None
 
     def test_get_job_returns_job_response(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         _fake_redis.hset("job:test-1", mapping={"status": "finished", "result": "done"})
@@ -93,7 +93,7 @@ class TestQueueModule:
         assert job.result == "done"
 
     def test_update_job_changes_status(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         _fake_redis.hset("job:test-2", mapping={"status": "queued"})
@@ -104,13 +104,13 @@ class TestQueueModule:
         assert data["started_at"] == "2025-01-01T00:00:00"
 
     def test_list_jobs_empty(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
 
         jobs = queue_module.list_jobs()
         assert jobs == []
 
     def test_list_jobs_with_entries(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         _fake_redis.hset("job:a", mapping={"status": "finished"})
@@ -120,7 +120,7 @@ class TestQueueModule:
         assert len(jobs) == 2
 
     def test_list_jobs_pagination(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         for i in range(5):
@@ -132,7 +132,7 @@ class TestQueueModule:
 
 class TestJobRetry:
     def test_retry_configured_with_correct_intervals(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_queue
 
         queue_module.create_job({"prompt": "Hello"})
@@ -144,7 +144,7 @@ class TestJobRetry:
         assert retry.intervals == [10, 60, 300]
 
     def test_retry_does_not_lose_job_data_on_failure(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         job_id, _ = queue_module.create_job({"prompt": "Hello"})
@@ -156,7 +156,7 @@ class TestJobRetry:
         assert data["error"] == "Something broke"
 
     def test_job_data_persists_across_status_transitions(self, monkeypatch):
-        from app import queue as queue_module
+        from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
         job_id, _ = queue_module.create_job({"prompt": "Hello"})

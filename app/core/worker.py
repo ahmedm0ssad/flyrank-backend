@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from rq import Worker
 from rq.worker import SimpleWorker
 
-from app.queue import QUEUE_NAME, REDIS_URL, REPORT_QUEUE_NAME
+from app.core.queue import QUEUE_NAME, REDIS_URL, REPORT_QUEUE_NAME
 
 logging.basicConfig(
     level=logging.INFO,

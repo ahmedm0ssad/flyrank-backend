@@ -98,7 +98,7 @@ Background jobs require a running Redis instance and a worker process:
 docker run -d -p 6379:6379 redis:7-alpine
 
 # Terminal 2: start the worker
-python -m app.worker
+python -m app.core.worker
 
 # Terminal 3: start the API
 uvicorn app.main:app --port 8000

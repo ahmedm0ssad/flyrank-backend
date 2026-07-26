@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.widgets.repository import WidgetRepository
+from app.repositories.widget_repo import WidgetRepository
 
 
 @pytest.fixture

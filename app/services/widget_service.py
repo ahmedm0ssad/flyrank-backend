@@ -2,9 +2,8 @@ import random
 import string
 from typing import Any
 
-from app.database import is_postgres_enabled
-
-from .models import WidgetCreate, WidgetResponse, WidgetUpdate
+from app.core.database import is_postgres_enabled
+from app.models.widget import WidgetCreate, WidgetResponse, WidgetUpdate
 
 if is_postgres_enabled():
 
@@ -29,7 +28,7 @@ if is_postgres_enabled():
 
     _repo = PostgresWidgetRepository()
 else:
-    from .repository import WidgetRepository
+    from app.repositories.widget_repo import WidgetRepository
 
     _repo = WidgetRepository()
 

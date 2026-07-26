@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import Request
 
-from app.embed.service import get_raw_widget
+from app.services.embed_service import get_raw_widget
 
 
 async def validate_origin(request: Request, widget_id: UUID) -> bool:

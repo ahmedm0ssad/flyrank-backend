@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.database import get_pool
+from app.core.database import get_pool
 from app.models.task import TaskCreate, TaskResponse, TaskUpdate
 
 

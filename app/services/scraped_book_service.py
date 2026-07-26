@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 
-from app.database import is_postgres_enabled
+from app.core.database import is_postgres_enabled
 from app.models.scraped_book import ScrapedBookCreate
 
 if is_postgres_enabled():

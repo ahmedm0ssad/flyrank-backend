@@ -13,7 +13,7 @@ def _get_redis():
 
 
 async def get_raw_widget(widget_id: str) -> dict | None:
-    from app.widgets.service import _get_repo
+    from app.services.widget_service import _get_repo
 
     repo = _get_repo()
     return await repo.get_by_id_raw(widget_id)
@@ -55,6 +55,6 @@ async def get_widget_config(widget_id: str) -> dict | None:
 
 
 async def generate_snippet(widget_id: str, js_version: int) -> str:
-    from app.embed.widget_js import generate_script_tag
+    from app.services.widget_js import generate_script_tag
 
     return generate_script_tag(widget_id, js_version)

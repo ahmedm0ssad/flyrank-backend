@@ -6,7 +6,7 @@ from supabase import AuthApiError, create_async_client
 
 from app.dependencies.auth import bearer_scheme, get_current_user
 from app.models.auth import AuthLogin, AuthSignup
-from app.supabase_client import get_client_credentials, get_supabase
+from app.core.supabase import get_client_credentials, get_supabase
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 protected_router = APIRouter(

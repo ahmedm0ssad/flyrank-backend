@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from rq import get_current_job
 
 from app.models.report import ReportStatus
-from app.queue import update_report_job
+from app.core.queue import update_report_job
 from app.services.alert import send_alert
 from app.services.pdf_generator import generate_report
 from app.services.report_service import (

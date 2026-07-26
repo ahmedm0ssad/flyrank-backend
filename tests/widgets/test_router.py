@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.dependencies.auth import get_current_user
 from app.main import app
-from app.widgets.models import WidgetResponse
+from app.models.widget import WidgetResponse
 
 
 def _make_response(
@@ -55,7 +55,7 @@ def _mock_auth_and_service(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: mock_user
 
     mock_service = AsyncMock()
-    monkeypatch.setattr("app.widgets.router.widget_service", mock_service)
+    monkeypatch.setattr("app.routers.widgets.widget_service", mock_service)
     yield mock_service, mock_user
     app.dependency_overrides.pop(get_current_user, None)
 

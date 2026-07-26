@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.widgets.models import WidgetCreate
+from app.models.widget import WidgetCreate
 
 
 class _FakeAsyncRedis:
@@ -25,7 +25,7 @@ class _FakeAsyncRedis:
 
 @pytest.fixture(autouse=True)
 def _reset_widget_repo():
-    from app.widgets.service import _get_repo
+    from app.services.widget_service import _get_repo
 
     repo = _get_repo()
     repo._widgets.clear()
@@ -65,7 +65,7 @@ def sample_widget_data():
 
 @pytest.fixture
 async def created_widget(sample_widget_data):
-    from app.widgets import service as widget_service
+    from app.services import widget_service
 
     data = WidgetCreate(**sample_widget_data)
     widget = await widget_service.create_widget(data, "11111111-1111-1111-1111-111111111111")

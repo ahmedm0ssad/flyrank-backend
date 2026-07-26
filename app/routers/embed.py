@@ -3,8 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, Response
 
-from app.embed import service as embed_service
-from app.embed.widget_js import render_widget_js
+from app.services import embed_service
+from app.services.widget_js import render_widget_js
 
 router = APIRouter(prefix="/public/widget", tags=["public-widget"])
 

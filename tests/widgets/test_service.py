@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.widgets import service as widget_service
-from app.widgets.models import WidgetCreate, WidgetResponse, WidgetUpdate
-from app.widgets.repository import WidgetRepository
+from app.services import widget_service
+from app.models.widget import WidgetCreate, WidgetResponse, WidgetUpdate
+from app.repositories.widget_repo import WidgetRepository
 
 
 @pytest.fixture(autouse=True)

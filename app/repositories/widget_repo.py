@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.widgets.models import WidgetResponse
+from app.models.widget import WidgetResponse
 
 
 class WidgetRepository:

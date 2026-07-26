@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.database import get_pool, is_postgres_enabled
+from app.core.database import get_pool, is_postgres_enabled
 from app.models.report import ReportResponse, ReportStatus
 
 

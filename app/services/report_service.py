@@ -2,7 +2,7 @@ import logging
 import os
 
 from app.models.report import ReportMetadataResponse, ReportStatus
-from app.queue import create_report_job
+from app.core.queue import create_report_job
 from app.repositories.report_repo import ReportRepository
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def get_scraped_books_stats() -> dict | None:
 
 def get_ai_jobs_stats() -> dict | None:
     try:
-        from app.queue import get_connection
+        from app.core.queue import get_connection
 
         conn = get_connection()
         cursor = 0
