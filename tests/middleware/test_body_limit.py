@@ -38,3 +38,21 @@ class TestBodyLimitMiddleware:
             },
         )
         assert resp.status_code in (201, 400, 403, 404, 429)
+
+    def test_spoofed_content_length_still_capped(self, client):
+        big_body = "x" * 60_000
+        resp = client.post(
+            "/public/widget/00000000-0000-0000-0000-000000000000/submit",
+            content=big_body,
+            headers={"Content-Type": "application/json", "Content-Length": "10"},
+        )
+        assert resp.status_code == 413
+
+    def test_missing_content_length_still_capped(self, client):
+        big_body = "x" * 60_000
+        resp = client.post(
+            "/public/widget/00000000-0000-0000-0000-000000000000/submit",
+            content=big_body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 413

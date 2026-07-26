@@ -16,6 +16,7 @@ class _FakeRedis:
     def __init__(self):
         self._data: dict[str, dict[str, str]] = {}
         self._strings: dict[str, str] = {}
+        self._ttls: dict[str, int] = {}
 
     def hset(self, key, mapping=None):
         if key not in self._data:
@@ -32,13 +33,14 @@ class _FakeRedis:
         return current + amount
 
     def expire(self, key, ttl):
-        pass
+        self._ttls[key] = ttl
 
     def get(self, key):
         return self._strings.get(key)
 
     def setex(self, key, ttl, value):
         self._strings[key] = value
+        self._ttls[key] = ttl
 
     def scan(self, cursor=0, match=None, count=10):
         keys = [
@@ -51,12 +53,42 @@ class _FakeRedis:
     def delete(self, key):
         self._strings.pop(key, None)
         self._data.pop(key, None)
+        self._ttls.pop(key, None)
 
     def close(self):
         pass
 
     def ping(self):
         return True
+
+    def pipeline(self):
+        return _FakePipeline(self._strings)
+
+    def incr(self, key):
+        val = int(self._strings.get(key, 0)) + 1
+        self._strings[key] = str(val)
+        return val
+
+    def ttl(self, key):
+        return self._ttls.get(key, -1)
+
+
+class _FakePipeline:
+    def __init__(self, strings):
+        self._strings = strings
+        self._commands = []
+
+    def incr(self, key):
+        self._commands.append(key)
+        return self
+
+    def execute(self):
+        results = []
+        for key in self._commands:
+            val = int(self._strings.get(key, 0)) + 1
+            self._strings[key] = str(val)
+            results.append(val)
+        return results
 
 
 class _FakeQueue:
@@ -76,6 +108,7 @@ _fake_queue = _FakeQueue()
 def _reset_queue(monkeypatch):
     _fake_redis._data.clear()
     _fake_redis._strings.clear()
+    _fake_redis._ttls.clear()
     _fake_queue.enqueued_jobs.clear()
     monkeypatch.setattr("app.core.queue.get_connection", lambda: _fake_redis)
     monkeypatch.setattr("app.core.queue.get_queue", lambda: _fake_queue)
@@ -117,3 +150,68 @@ def sample_book_data() -> dict:
 @pytest.fixture
 def sample_task_data() -> dict:
     return {"title": "Test Task", "done": False}
+
+
+@pytest.fixture
+def sample_lead_data() -> dict:
+    return {
+        "widget_id": "00000000-0000-0000-0000-000000000001",
+        "tenant_id": "00000000-0000-0000-0000-000000000002",
+        "form_data": {"name": "John Doe", "email": "john@example.com", "phone": "+1234567890"},
+        "ip_address": "192.168.1.1",
+        "fingerprint": "abc123def456",
+        "user_agent": "test-agent",
+        "referer": "https://myshop.com/contact",
+    }
+
+
+class _FakeAsyncRedis:
+    def __init__(self, sync_redis):
+        self._sync = sync_redis
+
+    async def get(self, key):
+        return self._sync.get(key)
+
+    async def setex(self, key, ttl, value):
+        self._sync.setex(key, ttl, value)
+
+    async def delete(self, key):
+        self._sync._strings.pop(key, None)
+        self._sync._data.pop(key, None)
+
+    async def ping(self):
+        return True
+
+    def pipeline(self):
+        return self._sync.pipeline() if hasattr(self._sync, 'pipeline') else _FakePipeline(self._sync._strings)
+
+    async def expire(self, key, ttl):
+        self._sync.expire(key, ttl)
+
+    async def incr(self, key):
+        val = int(self._sync._strings.get(key, 0)) + 1
+        self._sync._strings[key] = str(val)
+        return val
+
+
+@pytest.fixture
+def fake_redis():
+    return _fake_redis
+
+
+@pytest.fixture
+def fake_async_redis(fake_redis):
+    return _FakeAsyncRedis(fake_redis)
+
+
+@pytest.fixture
+def mock_redis(monkeypatch, fake_async_redis):
+    monkeypatch.setattr("app.main.get_redis", lambda: fake_async_redis)
+    yield fake_async_redis
+
+
+@pytest.fixture
+def mock_lead_queue(monkeypatch):
+    from tests.conftest import _fake_queue
+    monkeypatch.setattr("app.core.queue.get_enrichment_queue", lambda: _fake_queue)
+    return _fake_queue

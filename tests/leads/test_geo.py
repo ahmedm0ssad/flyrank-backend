@@ -197,6 +197,41 @@ class TestGeoEnrich:
         assert result is not None
         assert result["provider"] == "ipinfo"
 
+    def test_provider_response_parsing(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.geo_service.get_cached_geo", lambda ip: None
+        )
+
+        async def mock_ipapi(ip):
+            return {
+                "country": "United States",
+                "city": "Mountain View",
+                "region": "California",
+                "isp": "Google LLC",
+                "provider": "ipapi",
+            }
+
+        monkeypatch.setattr(
+            "app.services.geo_service._call_ipapi", mock_ipapi
+        )
+        monkeypatch.setattr(
+            "app.services.geo_service._call_ipinfo", _none_result
+        )
+        monkeypatch.setattr(
+            "app.services.geo_service._call_ipapi_com", _none_result
+        )
+        monkeypatch.setattr(
+            "app.services.geo_service.set_cached_geo", MagicMock()
+        )
+
+        result = geo_service.geo_enrich("8.8.8.8")
+        assert result is not None
+        assert result["country"] == "United States"
+        assert result["city"] == "Mountain View"
+        assert result["region"] == "California"
+        assert result["isp"] == "Google LLC"
+        assert result["provider"] == "ipapi"
+
     def test_provider_order_is_correct(self, monkeypatch):
         monkeypatch.setattr(
             "app.services.geo_service.get_cached_geo", lambda ip: None
