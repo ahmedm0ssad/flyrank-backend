@@ -11,12 +11,14 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.database import close_pool, get_pool, is_postgres_enabled
+from app.middleware.body_limit import BodyLimitMiddleware
 from app.routers import scrape, tasks
 from app.routers.ai import router as ai_router
 from app.routers.auth import auth_router, protected_router
 from app.routers.embed import router as embed_router
 from app.routers.reports import router as reports_router
 from app.routers.widgets import router as widgets_router
+from app.routers.leads import router as leads_router
 from app.core.supabase import get_client_credentials
 
 load_dotenv()
@@ -82,6 +84,8 @@ app.add_middleware(
     allow_credentials=False,
 )
 
+app.add_middleware(BodyLimitMiddleware, max_bytes=50_000)
+
 app.include_router(tasks.router)
 app.include_router(tasks.stats_router)
 app.include_router(scrape.router)
@@ -91,6 +95,7 @@ app.include_router(auth_router)
 app.include_router(protected_router)
 app.include_router(widgets_router)
 app.include_router(embed_router)
+app.include_router(leads_router)
 
 
 @app.exception_handler(RequestValidationError)
