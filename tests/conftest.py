@@ -86,6 +86,7 @@ def _no_postgres(monkeypatch):
     monkeypatch.setattr(
         "app.services.scraped_book_service.is_postgres_enabled", lambda: False
     )
+    monkeypatch.setattr("app.widgets.service.is_postgres_enabled", lambda: False)
 
 
 @pytest.fixture

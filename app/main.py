@@ -15,6 +15,7 @@ from app.routers.ai import router as ai_router
 from app.routers.auth import auth_router, protected_router
 from app.routers.reports import router as reports_router
 from app.supabase_client import get_client_credentials
+from app.widgets.router import router as widgets_router
 
 load_dotenv()
 
@@ -78,6 +79,7 @@ app.include_router(ai_router)
 app.include_router(reports_router)
 app.include_router(auth_router)
 app.include_router(protected_router)
+app.include_router(widgets_router)
 
 
 @app.exception_handler(RequestValidationError)
