@@ -309,6 +309,19 @@ class TestWorkerEntryPoint:
 
         assert callable(run_worker)
 
+    def test_enrichment_jobs_queue_in_watched_queues(self):
+        from app.core.worker import run_worker
+
+        import inspect
+
+        source = inspect.getsource(run_worker)
+        assert "ENRICHMENT_QUEUE_NAME" in source
+
+    def test_worker_imports_enrichment_queue_name(self):
+        from app.core.worker import ENRICHMENT_QUEUE_NAME
+
+        assert ENRICHMENT_QUEUE_NAME == "enrichment-jobs"
+
     def test_run_worker_handles_redis_connection_failure(self, monkeypatch):
         import redis
 

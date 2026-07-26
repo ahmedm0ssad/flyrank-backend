@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 from rq import Worker
 from rq.worker import SimpleWorker
 
-from app.core.queue import QUEUE_NAME, REDIS_URL, REPORT_QUEUE_NAME
+from app.core.queue import (
+    ENRICHMENT_QUEUE_NAME,
+    QUEUE_NAME,
+    REDIS_URL,
+    REPORT_QUEUE_NAME,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,7 +38,7 @@ def run_worker():
         sys.exit(1)
         return
 
-    queues = [QUEUE_NAME, REPORT_QUEUE_NAME]
+    queues = [QUEUE_NAME, REPORT_QUEUE_NAME, ENRICHMENT_QUEUE_NAME]
     logger.info("Starting RQ worker for queues: %s", queues)
 
     worker_class = SimpleWorker if os.name == "nt" else Worker

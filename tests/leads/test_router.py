@@ -1,6 +1,9 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app.dependencies.auth import get_current_user
 from app.main import app
 
 pytestmark = pytest.mark.usefixtures("mock_redis")
@@ -123,3 +126,109 @@ class TestSubmitLead:
         lead_id2 = resp2.json()["lead_id"]
 
         assert lead_id1 == lead_id2
+
+
+class TestReEnrichLead:
+    @pytest.fixture(autouse=True)
+    def _mock_auth(self):
+        mock_user = {
+            "id": uuid.UUID("11111111-1111-1111-1111-111111111111"),
+            "email": "test@example.com",
+            "access_token": "fake-token",
+        }
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        yield
+        app.dependency_overrides.pop(get_current_user, None)
+
+    def test_202_re_enqueues_failed_lead(self, client, created_widget):
+        from app.services import lead_service
+
+        repo = lead_service._get_or_create_repo()
+        lead_id = str(uuid.uuid4())
+        repo._leads[lead_id] = {
+            "id": lead_id,
+            "widget_id": str(created_widget.id),
+            "tenant_id": "11111111-1111-1111-1111-111111111111",
+            "form_data": {"name": "John"},
+            "ip_address": "8.8.8.8",
+            "fingerprint": "abc",
+            "status": "failed",
+            "honeypot_triggered": False,
+            "spam_score": 0.0,
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
+        }
+
+        from tests.conftest import _fake_queue
+
+        _fake_queue.enqueued_jobs.clear()
+
+        resp = client.post(
+            f"/widgets/{created_widget.id}/leads/{lead_id}/re-enrich",
+        )
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "re-enqueued"
+        assert data["lead_id"] == lead_id
+
+    def test_409_if_already_enriched(self, client, created_widget):
+        from app.services import lead_service
+
+        repo = lead_service._get_or_create_repo()
+        lead_id = str(uuid.uuid4())
+        repo._leads[lead_id] = {
+            "id": lead_id,
+            "widget_id": str(created_widget.id),
+            "tenant_id": "11111111-1111-1111-1111-111111111111",
+            "form_data": {"name": "John"},
+            "ip_address": "8.8.8.8",
+            "fingerprint": "abc",
+            "status": "enriched",
+            "honeypot_triggered": False,
+            "spam_score": 0.0,
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
+        }
+
+        resp = client.post(
+            f"/widgets/{created_widget.id}/leads/{lead_id}/re-enrich",
+        )
+        assert resp.status_code == 409
+
+    def test_409_if_in_flight_pending(self, client, created_widget):
+        from app.services import lead_service
+
+        repo = lead_service._get_or_create_repo()
+        lead_id = str(uuid.uuid4())
+        repo._leads[lead_id] = {
+            "id": lead_id,
+            "widget_id": str(created_widget.id),
+            "tenant_id": "11111111-1111-1111-1111-111111111111",
+            "form_data": {"name": "John"},
+            "ip_address": "8.8.8.8",
+            "fingerprint": "abc",
+            "status": "pending",
+            "honeypot_triggered": False,
+            "spam_score": 0.0,
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
+        }
+
+        resp = client.post(
+            f"/widgets/{created_widget.id}/leads/{lead_id}/re-enrich",
+        )
+        assert resp.status_code == 409
+
+    def test_404_lead_not_found(self, client, created_widget):
+        resp = client.post(
+            f"/widgets/{created_widget.id}/leads/"
+            f"00000000-0000-0000-0000-000000000000/re-enrich",
+        )
+        assert resp.status_code == 404
+
+    def test_404_widget_not_found(self, client):
+        resp = client.post(
+            "/widgets/00000000-0000-0000-0000-000000000000/leads/"
+            "00000000-0000-0000-0000-000000000000/re-enrich",
+        )
+        assert resp.status_code == 404

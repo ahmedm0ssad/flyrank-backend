@@ -17,6 +17,7 @@ ENRICHMENT_QUEUE_NAME = "enrichment-jobs"
 _connection: redis.Redis | None = None
 _queue: Queue | None = None
 _report_queue: Queue | None = None
+_enrichment_queue: Queue | None = None
 
 
 def get_connection() -> redis.Redis:
@@ -41,12 +42,13 @@ def get_report_queue() -> Queue:
 
 
 def reset_connection():
-    global _connection, _queue, _report_queue
+    global _connection, _queue, _report_queue, _enrichment_queue
     if _connection:
         _connection.close()
     _connection = None
     _queue = None
     _report_queue = None
+    _enrichment_queue = None
 
 
 def create_job(
@@ -198,7 +200,10 @@ def update_report_job(job_id: str, status: str, **extra):
 
 
 def get_enrichment_queue() -> Queue:
-    return Queue(ENRICHMENT_QUEUE_NAME, connection=get_connection())
+    global _enrichment_queue
+    if _enrichment_queue is None:
+        _enrichment_queue = Queue(ENRICHMENT_QUEUE_NAME, connection=get_connection())
+    return _enrichment_queue
 
 
 def create_enrichment_job(lead_id: str) -> str:
@@ -229,3 +234,30 @@ def create_enrichment_job(lead_id: str) -> str:
     )
 
     return job_id
+
+
+def get_enrichment_job(job_id: str) -> JobResponse | None:
+    conn = get_connection()
+    data = conn.hgetall(f"enrichment_job:{job_id}")
+    if not data:
+        return None
+
+    return JobResponse(
+        job_id=job_id,
+        status=JobStatus(data.get("status", JobStatus.QUEUED.value)),
+        result=data.get("result"),
+        error=data.get("error"),
+        created_at=data.get("created_at"),
+        started_at=data.get("started_at"),
+        finished_at=data.get("finished_at"),
+        attempts=int(data.get("attempts", 0)),
+    )
+
+
+def update_enrichment_job(job_id: str, status: str, **extra):
+    conn = get_connection()
+    now = datetime.now(timezone.utc).isoformat()
+    mapping = {"status": status, "updated_at": now}
+    mapping.update(extra)
+    conn.hset(f"enrichment_job:{job_id}", mapping=mapping)
+    conn.expire(f"enrichment_job:{job_id}", JOB_TTL)

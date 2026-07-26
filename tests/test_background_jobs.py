@@ -323,6 +323,105 @@ class TestAiService:
         assert "Mock response" in result
 
 
+class TestEnrichmentQueue:
+    def test_create_enrichment_job_returns_job_id(self, monkeypatch):
+        from app.core import queue as queue_module
+
+        job_id = queue_module.create_enrichment_job("lead-abc")
+        assert job_id is not None
+
+    def test_create_enrichment_job_stores_in_redis(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_redis
+
+        job_id = queue_module.create_enrichment_job("lead-abc")
+        data = _fake_redis.hgetall(f"enrichment_job:{job_id}")
+        assert data["status"] == "queued"
+        assert data["attempts"] == "0"
+
+    def test_create_enrichment_job_enqueues_to_correct_queue(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_queue
+
+        queue_module.create_enrichment_job("lead-abc")
+        assert len(_fake_queue.enqueued_jobs) == 1
+        kwargs = _fake_queue.enqueued_jobs[0]["kwargs"]
+        assert "retry" in kwargs
+        retry = kwargs["retry"]
+        assert retry.max == 3
+        assert retry.intervals == [10, 60, 300]
+        assert kwargs["job_timeout"] == 600
+
+    def test_create_enrichment_job_calls_correct_worker(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_queue
+
+        queue_module.create_enrichment_job("lead-abc")
+        assert len(_fake_queue.enqueued_jobs) == 1
+        assert (
+            _fake_queue.enqueued_jobs[0]["func"]
+            == "app.services.lead_worker.run_enrichment_job"
+        )
+        assert _fake_queue.enqueued_jobs[0]["args"] == ("lead-abc",)
+
+    def test_get_enrichment_job_returns_none_for_missing(self, monkeypatch):
+        from app.core import queue as queue_module
+
+        result = queue_module.get_enrichment_job("nonexistent")
+        assert result is None
+
+    def test_get_enrichment_job_returns_job_response(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_redis
+
+        _fake_redis.hset(
+            "enrichment_job:test-1",
+            mapping={"status": "finished", "result": "enriched"},
+        )
+
+        job = queue_module.get_enrichment_job("test-1")
+        assert job is not None
+        assert job.job_id == "test-1"
+        assert job.status == JobStatus.FINISHED
+        assert job.result == "enriched"
+
+    def test_update_enrichment_job_changes_status(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_redis
+
+        _fake_redis.hset(
+            "enrichment_job:test-2", mapping={"status": "queued"}
+        )
+
+        queue_module.update_enrichment_job(
+            "test-2", "started", started_at="2025-01-01T00:00:00"
+        )
+        data = _fake_redis.hgetall("enrichment_job:test-2")
+        assert data["status"] == "started"
+        assert data["started_at"] == "2025-01-01T00:00:00"
+
+    def test_get_enrichment_queue_returns_singleton(self, monkeypatch):
+        from app.core import queue as queue_module
+
+        queue_module._enrichment_queue = None
+        q1 = queue_module.get_enrichment_queue()
+        q2 = queue_module.get_enrichment_queue()
+        assert q1 is q2
+
+        queue_module.reset_connection()
+
+    def test_enrichment_retry_config_matches_report_jobs(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_queue
+
+        queue_module.create_enrichment_job("lead-abc")
+        kwargs = _fake_queue.enqueued_jobs[0]["kwargs"]
+        retry = kwargs["retry"]
+        assert retry.max == 3
+        assert retry.intervals == [10, 60, 300]
+        assert retry.intervals == [10, 60, 300]
+
+
 class TestFailureHandling:
     def test_job_failure_response_includes_status_and_error(
         self, client: TestClient, monkeypatch

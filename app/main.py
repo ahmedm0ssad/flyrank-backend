@@ -19,6 +19,7 @@ from app.routers.embed import router as embed_router
 from app.routers.reports import router as reports_router
 from app.routers.widgets import router as widgets_router
 from app.routers.leads import router as leads_router
+from app.routers.leads import dashboard_router as leads_dashboard_router
 from app.core.supabase import get_client_credentials
 
 load_dotenv()
@@ -96,6 +97,7 @@ app.include_router(protected_router)
 app.include_router(widgets_router)
 app.include_router(embed_router)
 app.include_router(leads_router)
+app.include_router(leads_dashboard_router)
 
 
 @app.exception_handler(RequestValidationError)
