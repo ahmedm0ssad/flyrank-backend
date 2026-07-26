@@ -25,3 +25,16 @@ CREATE TABLE IF NOT EXISTS scraped_books (
 
 CREATE INDEX IF NOT EXISTS idx_scraped_books_category ON scraped_books(category);
 CREATE INDEX IF NOT EXISTS idx_scraped_books_url ON scraped_books(url);
+
+CREATE TABLE IF NOT EXISTS reports (
+    id SERIAL PRIMARY KEY,
+    job_id VARCHAR(36) NOT NULL UNIQUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'queued',
+    file_path VARCHAR(500),
+    error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_job_id ON reports(job_id);
