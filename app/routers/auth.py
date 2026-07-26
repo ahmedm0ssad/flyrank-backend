@@ -1,3 +1,6 @@
+import os
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from supabase import AuthApiError, create_async_client
 
@@ -17,6 +20,11 @@ protected_router = APIRouter(
 async def signup(body: AuthSignup):
     supabase = await get_supabase()
     try:
+        if await _email_exists(body.email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
         res = await supabase.auth.sign_up(
             {"email": body.email, "password": body.password}
         )
@@ -28,6 +36,29 @@ async def signup(body: AuthSignup):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+
+async def _email_exists(email: str) -> bool:
+    url = os.getenv("SUPABASE_URL", "")
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not service_key:
+        return False
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{url}/auth/v1/admin/users",
+                params={"filter": f"email:eq:{email}"},
+                headers={
+                    "apikey": service_key,
+                    "Authorization": f"Bearer {service_key}",
+                },
+            )
+            if r.is_error:
+                return False
+            data = r.json()
+            return len(data.get("users", [])) > 0
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return False
 
 
 @auth_router.post("/login")
