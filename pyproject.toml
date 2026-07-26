@@ -12,6 +12,7 @@ dependencies = []
 [tool.ruff.lint.per-file-ignores]
 "app/routers/auth.py" = ["B008"]
 "app/dependencies/auth.py" = ["B008"]
+"app/routers/reports.py" = ["B008"]
 
 [tool.isort]
 profile = "black"
