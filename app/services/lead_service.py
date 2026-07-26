@@ -1,3 +1,6 @@
+import csv
+import io
+from datetime import date
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
@@ -5,7 +8,7 @@ from fastapi import HTTPException, Request, status
 from app.dependencies.leads import check_origin, check_rate_limits
 from app.models.lead import LeadResponse, LeadSubmit
 from app.repositories.lead_repo import LeadRepository
-from app.services import embed_service
+from app.services import embed_service, widget_service
 from app.services.fingerprint_service import (
     check_dedup,
     compute_fingerprint,
@@ -20,12 +23,58 @@ def _get_repo():
 
 _repo: LeadRepository | None = None
 
+_redis_client = None
+
+
+def _set_redis(client):
+    global _redis_client
+    _redis_client = client
+
 
 def _get_or_create_repo():
     global _repo
     if _repo is None:
         _repo = _get_repo()
     return _repo
+
+
+async def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        try:
+            from app.main import get_redis
+            _redis_client = get_redis()
+        except (ImportError, RuntimeError):
+            pass
+    return _redis_client
+
+
+async def _cache_stats(cache_key: str, stats: dict, ttl: int = 300):
+    client = await _get_redis()
+    if client:
+        try:
+            import json
+            await client.setex(cache_key, ttl, json.dumps(stats))
+        except Exception:
+            pass
+
+
+async def _invalidate_stats_cache(widget_id: str | None = None, tenant_id: str | None = None):
+    client = await _get_redis()
+    if client:
+        try:
+            keys_to_delete = []
+            if widget_id:
+                keys_to_delete.append(f"stats:widget:{widget_id}")
+            if tenant_id:
+                keys_to_delete.append(f"stats:tenant:{tenant_id}")
+            for key in keys_to_delete:
+                await client.delete(key)
+        except Exception:
+            pass
+
+
+_CACHE_TTL = 300
 
 
 async def submit_lead(
@@ -106,6 +155,9 @@ async def submit_lead(
     # Mark fingerprint as seen
     await mark_seen(fingerprint, str(lead.id))
 
+    # Invalidate stats cache best-effort
+    await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
+
     # Step 11: Enqueue enrichment job (skipped for honeypot)
     if not skip_enrich:
         try:
@@ -116,3 +168,185 @@ async def submit_lead(
             pass
 
     return lead, False
+
+
+async def get_leads(
+    widget_id: str,
+    tenant_id: str,
+    include_honeypot: bool = False,
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    status: str | None = None,
+    spam_min: float | None = None,
+    spam_max: float | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+) -> tuple[list[LeadResponse], int]:
+    repo = _get_or_create_repo()
+    return await repo.list_by_widget(
+        widget_id=widget_id,
+        tenant_id=tenant_id,
+        include_honeypot=include_honeypot,
+        page=page,
+        page_size=page_size,
+        search=search,
+        status=status,
+        spam_min=spam_min,
+        spam_max=spam_max,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+
+
+async def get_all_leads(
+    tenant_id: str,
+    include_honeypot: bool = False,
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    status: str | None = None,
+    spam_min: float | None = None,
+    spam_max: float | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+) -> tuple[list[LeadResponse], int]:
+    repo = _get_or_create_repo()
+    return await repo.list_by_tenant(
+        tenant_id=tenant_id,
+        include_honeypot=include_honeypot,
+        page=page,
+        page_size=page_size,
+        search=search,
+        status=status,
+        spam_min=spam_min,
+        spam_max=spam_max,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+
+
+async def get_lead_detail(
+    lead_id: str, widget_id: str, tenant_id: str
+) -> LeadResponse | None:
+    repo = _get_or_create_repo()
+    lead = await repo.get_by_id(lead_id)
+    if lead is None:
+        return None
+    if str(lead.widget_id) != widget_id or str(lead.tenant_id) != tenant_id:
+        return None
+    return lead
+
+
+async def get_widget_stats(
+    widget_id: str, tenant_id: str, skip_cache: bool = False
+) -> dict:
+    client = await _get_redis()
+    cache_key = f"stats:widget:{widget_id}"
+
+    if client and not skip_cache:
+        try:
+            import json
+            cached = await client.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+
+    repo = _get_or_create_repo()
+    stats = await repo.get_stats(widget_id, tenant_id)
+
+    if client:
+        await _cache_stats(cache_key, stats)
+    return stats
+
+
+async def get_tenant_stats(
+    tenant_id: str, skip_cache: bool = False
+) -> dict:
+    client = await _get_redis()
+    cache_key = f"stats:tenant:{tenant_id}"
+
+    if client and not skip_cache:
+        try:
+            import json
+            cached = await client.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+
+    repo = _get_or_create_repo()
+    stats = await repo.get_tenant_stats(tenant_id)
+
+    if client:
+        await _cache_stats(cache_key, stats)
+    return stats
+
+
+async def export_csv(
+    widget_id: str,
+    tenant_id: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> str:
+    repo = _get_or_create_repo()
+    leads = await repo.get_export_data(
+        widget_id=widget_id,
+        tenant_id=tenant_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    fields = [
+        "id", "widget_id", "tenant_id", "form_data", "ip_address",
+        "user_agent", "referer", "fingerprint", "geo_country", "geo_city",
+        "geo_region", "geo_isp", "geo_provider", "spam_score",
+        "spam_reasons", "honeypot_triggered", "status", "created_at", "updated_at",
+    ]
+    writer.writerow(fields)
+
+    for lead in leads:
+        row = []
+        for f in fields:
+            val = lead.get(f)
+            if isinstance(val, dict) or isinstance(val, list):
+                import json
+                val = json.dumps(val)
+            elif val is None:
+                val = ""
+            elif isinstance(val, bool):
+                val = str(val).lower()
+            else:
+                val = str(val)
+            row.append(val)
+        writer.writerow(row)
+
+    return output.getvalue()
+
+
+async def delete_lead(lead_id: str, widget_id: str, tenant_id: str) -> bool:
+    repo = _get_or_create_repo()
+    result = await repo.delete(lead_id, widget_id, tenant_id)
+    if result:
+        await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
+    return result
+
+
+async def batch_delete_leads(lead_ids: list[str], widget_id: str, tenant_id: str) -> int:
+    repo = _get_or_create_repo()
+    count = await repo.batch_delete(lead_ids, widget_id, tenant_id)
+    if count > 0:
+        await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
+    return count

@@ -1,3 +1,7 @@
+import datetime
+from datetime import date
+from unittest.mock import AsyncMock
+
 import pytest
 from fastapi import HTTPException
 
@@ -33,7 +37,6 @@ class TestSubmitLead:
     @pytest.mark.asyncio
     async def test_honeypot_branch(self, created_widget):
         from app.services import widget_service
-        from app.repositories.widget_repo import WidgetRepository
 
         widget_id = str(created_widget.id)
 
@@ -103,3 +106,166 @@ class TestSubmitLead:
         with pytest.raises(HTTPException) as exc:
             await lead_service.submit_lead(widget_id, body, request)
         assert exc.value.status_code == 403
+
+
+class TestDashboardService:
+    @pytest.mark.asyncio
+    async def test_get_leads(self, created_widget):
+        widget_id = str(created_widget.id)
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(widget_id)
+        tenant_id = str(raw["tenant_id"])
+
+        items, total = await lead_service.get_leads(
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+        )
+        assert total == 0
+
+    @pytest.mark.asyncio
+    async def test_get_all_leads(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+
+        items, total = await lead_service.get_all_leads(tenant_id=tenant_id)
+        assert total == 0
+
+    @pytest.mark.asyncio
+    async def test_get_lead_detail_not_found(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+
+        result = await lead_service.get_lead_detail(
+            lead_id="00000000-0000-0000-0000-000000000000",
+            widget_id=str(created_widget.id),
+            tenant_id=tenant_id,
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_widget_stats_honeypot_excluded(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+        widget_id = str(created_widget.id)
+
+        repo = lead_service._get_or_create_repo()
+        body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
+        request = FakeRequest()
+        await lead_service.submit_lead(widget_id, body, request)
+
+        hp_body = LeadSubmit(form_data={
+            "name": "Bot",
+            "email": "bot@spam.com",
+            raw["config"]["honeypot_field"]: "value",
+        })
+        await lead_service.submit_lead(widget_id, hp_body, request)
+
+        stats = await lead_service.get_widget_stats(widget_id, tenant_id, skip_cache=True)
+        assert stats["total_leads"] == 1
+        assert stats["honeypot_blocked"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_stats_cross_widget(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+
+        stats = await lead_service.get_tenant_stats(tenant_id, skip_cache=True)
+        assert stats["total_leads"] == 0
+
+    @pytest.mark.asyncio
+    async def test_export_csv(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+        widget_id = str(created_widget.id)
+
+        body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
+        request = FakeRequest()
+        await lead_service.submit_lead(widget_id, body, request)
+
+        csv_content = await lead_service.export_csv(
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+        )
+        assert "John" in csv_content
+        assert "john@test.com" in csv_content
+        assert csv_content.startswith("id,")
+
+    @pytest.mark.asyncio
+    async def test_export_csv_with_date_filter(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+        widget_id = str(created_widget.id)
+
+        body = LeadSubmit(form_data={"name": "John"})
+        request = FakeRequest()
+        await lead_service.submit_lead(widget_id, body, request)
+
+        csv_content = await lead_service.export_csv(
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+            date_from=date(2099, 1, 1),
+        )
+        assert len(csv_content.splitlines()) == 1
+
+    @pytest.mark.asyncio
+    async def test_delete_lead(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+        widget_id = str(created_widget.id)
+
+        body = LeadSubmit(form_data={"name": "John"})
+        request = FakeRequest()
+        lead, _ = await lead_service.submit_lead(widget_id, body, request)
+
+        result = await lead_service.delete_lead(str(lead.id), widget_id, tenant_id)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_delete_lead_not_found(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+
+        result = await lead_service.delete_lead(
+            "00000000-0000-0000-0000-000000000000",
+            str(created_widget.id),
+            tenant_id,
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_batch_delete_leads(self, created_widget):
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
+        tenant_id = str(raw["tenant_id"])
+        widget_id = str(created_widget.id)
+
+        ids = []
+        repo = lead_service._get_or_create_repo()
+        for i in range(3):
+            lead = await repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": f"User {i}"}, ip_address="1.1.1.1",
+                fingerprint=f"fp-batch-{i}",
+            )
+            ids.append(str(lead.id))
+
+        count = await lead_service.batch_delete_leads(ids, widget_id, tenant_id)
+        assert count == 3

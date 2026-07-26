@@ -64,3 +64,15 @@ class LeadResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PaginatedLeadResponse(BaseModel):
+    items: list[LeadResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class BatchDeleteRequest(BaseModel):
+    lead_ids: list[UUID]
