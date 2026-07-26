@@ -21,7 +21,7 @@ async def create_ai_job(
 ):
     job_id, status_val = create_job(payload.model_dump(), idempotency_key)
     logger.info("Job %s created with status %s", job_id, status_val.value)
-    return JobEnqueueResponse(job_id=job_id, status=status_val)
+    return JobEnqueueResponse(job_id=job_id, status=status_val, status_url=f"/jobs/{job_id}")
 
 
 @router.get("/jobs/{job_id}")

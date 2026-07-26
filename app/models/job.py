@@ -18,6 +18,7 @@ class JobCreate(BaseModel):
 class JobEnqueueResponse(BaseModel):
     job_id: str
     status: JobStatus = JobStatus.QUEUED
+    status_url: str = ""
 
 
 class JobResponse(BaseModel):
