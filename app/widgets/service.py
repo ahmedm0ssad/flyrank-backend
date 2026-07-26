@@ -140,3 +140,7 @@ async def update_widget(
 
 async def delete_widget(widget_id: str, tenant_id: str) -> bool:
     return await _repo.soft_delete(widget_id, tenant_id)
+
+
+def _get_repo():
+    return _repo
