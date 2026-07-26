@@ -1,10 +1,6 @@
-# FlyRank — AI Background Jobs
+# FlyRank — AI Background Jobs + PDF Report Generator
 
-A FastAPI backend combining task management, web scraping, authentication, and asynchronous AI job processing via RQ (Redis Queue) and Groq LLM inference.
-
-## Assignment Goal
-
-Add an asynchronous background job system for AI inference using Redis Queue, with idempotent job creation, status polling, retry logic, and a dedicated RQ worker process.
+A FastAPI backend combining task management, web scraping, authentication, asynchronous AI job processing via RQ (Redis Queue) and Groq LLM inference, and automated PDF report generation.
 
 ## Features
 
@@ -21,6 +17,7 @@ Add an asynchronous background job system for AI inference using Redis Queue, wi
 - Book scraper with robots.txt compliance and rate limiting
 - Docker Compose stack (PostgreSQL + Redis + App)
 - CI pipeline with automated linting and testing via GitHub Actions
+- **PDF Report Generation** — asynchronous background report generation via RQ with real database aggregation
 
 ## Technologies Used
 
@@ -152,6 +149,14 @@ uvicorn app.main:app --port 8000
 | GET    | `/jobs/{job_id}` | No   | Poll job status               |
 | GET    | `/jobs`          | No   | List recent jobs              |
 
+### Reports
+
+| Method | Path                                    | Auth | Description                       |
+|--------|-----------------------------------------|------|-----------------------------------|
+| POST   | `/reports`                              | No   | Enqueue a PDF report generation    |
+| GET    | `/reports/{job_id}`                     | No   | Poll report status and metadata    |
+| GET    | `/reports/files/{filename}`             | No   | Download a generated PDF file      |
+
 ## AI Background Jobs — Architecture
 
 AI inference is processed asynchronously via RQ (Redis Queue), with a dedicated worker process consuming jobs from the `ai-jobs` queue.
@@ -181,6 +186,28 @@ Jobs time out after 600s (10 minutes). Job data is persisted in Redis with a 24h
 
 Include an `Idempotency-Key` header to prevent duplicate job creation. The key-to-job mapping is stored in Redis with a 24h TTL.
 
+## PDF Report Generation — Architecture
+
+Reports are generated asynchronously via RQ (Redis Queue), with a dedicated worker consuming jobs from the `report-jobs` queue. The PDF is produced server-side using ReportLab and stored on disk in the `generated_reports/` directory.
+
+### Queue Flow
+
+1. Client sends `POST /reports` — the API creates a job record in Redis and enqueues it
+2. API immediately returns `202 Accepted` with the `job_id`
+3. Worker picks up the job, sets status to `started`, updates the reports DB record
+4. Worker queries the database for aggregations (scraped books stats, AI jobs stats)
+5. Worker generates a PDF using ReportLab with tables, sections, and page numbering
+6. On success: status set to `finished`, file path stored in DB
+7. On failure: status set to `failed`, error stored; retries if attempts remain
+
+### Retry Policy
+
+Same three-tier backoff as AI jobs: 10s → 60s → 300s.
+
+### Download
+
+PDFs are served via `GET /reports/files/{filename}` with path-traversal protection and filename validation. Only files within the `generated_reports/` directory can be downloaded.
+
 ## Project Structure
 
 ```
@@ -193,12 +220,15 @@ app/
     dependencies/
         auth.py                 # Bearer token dependency
     models/
-        task.py, auth.py, scraped_book.py, job.py
+        task.py, auth.py, scraped_book.py, job.py, report.py
     services/
         task_service.py         # Task business logic
         scraped_book_service.py # Scrape orchestration
         ai_service.py           # Groq API call (with mock fallback)
         ai_worker.py            # RQ worker function
+        report_service.py       # Report enqueue + metadata + aggregation
+        report_worker.py        # RQ worker function for PDF generation
+        pdf_generator.py        # ReportLab PDF document builder
         alert.py                # Failure alert stub
     repositories/
         protocol.py             # TaskRepository Protocol
@@ -206,11 +236,13 @@ app/
         postgres_repo.py        # PostgreSQL via asyncpg
         inmemory_repo.py        # In-memory fallback
         scraped_book_repo.py    # ScrapedBook PostgreSQL
+        report_repo.py          # Report CRUD (SQLite + PostgreSQL)
     routers/
         tasks.py                # Task CRUD + stats
         auth.py                 # Auth endpoints
         scrape.py               # Scrape trigger
         ai.py                   # AI job enqueue + status
+        reports.py              # Report enqueue, status, download
     scrapers/
         session.py, parser.py, cleaner.py, pipeline.py
 db/
@@ -253,6 +285,13 @@ pytest tests/test_e2e.py -v -s
 
 # End-to-end AI (requires real Redis + a running RQ worker)
 pytest tests/test_ai_e2e.py -v -s
+
+# Report tests
+pytest tests/routers/test_reports.py -v
+pytest tests/services/test_pdf_generator.py -v
+pytest tests/services/test_report_service.py -v
+pytest tests/test_report_worker.py -v
+pytest tests/repositories/test_report_repo.py -v
 ```
 
 ### CI Pipeline
@@ -293,12 +332,24 @@ curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json
 
 # Scrape (requires PostgreSQL)
 curl -X POST "http://localhost:8000/scrape?max_pages=3"
+
+# Enqueue a PDF report
+curl -X POST http://localhost:8000/reports
+
+# Response: 202 Accepted
+# {"job_id":"<uuid>","status":"queued"}
+
+# Poll report status
+curl http://localhost:8000/reports/<uuid>
+
+# Download generated PDF
+curl -o report.pdf http://localhost:8000/reports/files/hr_report_<uuid>.pdf
 ```
 
 ## Known Limitations
 
 - Scraped book persistence requires PostgreSQL — SQLite is not supported for this feature
-- AI jobs require Redis with an active RQ worker
+- AI jobs and report generation require Redis with an active RQ worker
 - No email verification flow (disable Supabase's "Confirm email" setting for local development)
 - The scraper runs synchronously within the request thread
 - Supabase free-tier rate limits may affect auth end-to-end tests
