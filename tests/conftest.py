@@ -80,6 +80,7 @@ def _reset_queue(monkeypatch):
     monkeypatch.setattr("app.core.queue.get_connection", lambda: _fake_redis)
     monkeypatch.setattr("app.core.queue.get_queue", lambda: _fake_queue)
     monkeypatch.setattr("app.core.queue.get_report_queue", lambda: _fake_queue)
+    monkeypatch.setattr("app.core.queue.get_enrichment_queue", lambda: _fake_queue)
 
 
 @pytest.fixture(autouse=True)

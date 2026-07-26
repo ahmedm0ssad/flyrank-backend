@@ -12,6 +12,7 @@ IDEMPOTENCY_TTL = 86400
 JOB_TTL = 86400
 QUEUE_NAME = "ai-jobs"
 REPORT_QUEUE_NAME = "report-jobs"
+ENRICHMENT_QUEUE_NAME = "enrichment-jobs"
 
 _connection: redis.Redis | None = None
 _queue: Queue | None = None
@@ -194,3 +195,37 @@ def update_report_job(job_id: str, status: str, **extra):
     mapping.update(extra)
     conn.hset(f"report_job:{job_id}", mapping=mapping)
     conn.expire(f"report_job:{job_id}", JOB_TTL)
+
+
+def get_enrichment_queue() -> Queue:
+    return Queue(ENRICHMENT_QUEUE_NAME, connection=get_connection())
+
+
+def create_enrichment_job(lead_id: str) -> str:
+    conn = get_connection()
+    job_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    conn.hset(
+        f"enrichment_job:{job_id}",
+        mapping={
+            "status": JobStatus.QUEUED.value,
+            "created_at": now,
+            "updated_at": now,
+            "attempts": "0",
+        },
+    )
+    conn.expire(f"enrichment_job:{job_id}", JOB_TTL)
+
+    retry = Retry(max=3, interval=[10, 60, 300])
+    enrichment_queue = get_enrichment_queue()
+    enrichment_queue.enqueue(
+        "app.services.lead_worker.run_enrichment_job",
+        lead_id,
+        job_id=job_id,
+        retry=retry,
+        job_timeout=600,
+        meta={"max_retries": 3},
+    )
+
+    return job_id
