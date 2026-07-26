@@ -53,7 +53,9 @@ def run_ai_job(payload: dict) -> str:
             update_job(job_id, JobStatus.QUEUED.value)
             logger.info(
                 "Job %s requeued for retry (attempt %d, retries_left=%s)",
-                job_id, attempts, job.retries_left,
+                job_id,
+                attempts,
+                job.retries_left,
             )
         else:
             update_job(

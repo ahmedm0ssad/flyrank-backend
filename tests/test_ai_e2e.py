@@ -26,7 +26,9 @@ class TestE2EHappyPath:
 
         from app.services.ai_worker import run_ai_job
 
-        run_ai_job({"prompt": "Say 'hello world' in one word", "model": "llama3-8b-8192"})
+        run_ai_job(
+            {"prompt": "Say 'hello world' in one word", "model": "llama3-8b-8192"}
+        )
 
         final = client.get(f"/jobs/{job_id}").json()
         assert final["status"] == "finished"
