@@ -1,5 +1,7 @@
 import csv
 import io
+import json
+import logging
 from datetime import date
 from uuid import UUID
 
@@ -15,6 +17,9 @@ from app.services.fingerprint_service import (
     mark_seen,
 )
 from app.services.spam_service import score_submission
+
+logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("app.audit.submission")
 
 
 def _get_repo():
@@ -53,7 +58,6 @@ async def _cache_stats(cache_key: str, stats: dict, ttl: int = 300):
     client = await _get_redis()
     if client:
         try:
-            import json
             await client.setex(cache_key, ttl, json.dumps(stats))
         except Exception:
             pass
@@ -77,28 +81,41 @@ async def _invalidate_stats_cache(widget_id: str | None = None, tenant_id: str |
 _CACHE_TTL = 300
 
 
+def _audit_log(outcome: str, widget_id: str, ip: str, extra: dict | None = None) -> None:
+    entry = {"outcome": outcome, "widget_id": widget_id, "ip": ip}
+    if extra:
+        entry.update(extra)
+    audit_logger.info(json.dumps(entry))
+
+
 async def submit_lead(
     widget_id: str,
     body: LeadSubmit,
     request: Request,
 ) -> tuple[LeadResponse, bool]:
     repo = _get_or_create_repo()
+    ip = request.client.host if request.client else "unknown"
 
     # Step 4: Widget exists & active check
     config = await embed_service.get_widget_config(widget_id)
     if config is None:
+        _audit_log("widget_not_found", widget_id, ip)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Widget not found",
         )
 
     # Step 5: Origin validation (reuses app/dependencies/embed.py)
-    await check_origin(request, UUID(widget_id))
+    try:
+        await check_origin(request, UUID(widget_id))
+    except HTTPException:
+        _audit_log("origin_rejected", widget_id, ip)
+        raise
 
     # Step 6: Rate limit check - all 3 tiers
-    ip = request.client.host if request.client else "unknown"
     retry_after = await check_rate_limits(ip, widget_id)
     if retry_after is not None:
+        _audit_log("rate_limited", widget_id, ip, {"retry_after": retry_after})
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded",
@@ -129,6 +146,10 @@ async def submit_lead(
     if existing_lead_id is not None:
         existing = await repo.get_by_id(existing_lead_id)
         if existing is not None:
+            _audit_log("fingerprint_dedup", widget_id, ip, {
+                "fingerprint": fingerprint,
+                "existing_lead_id": str(existing.id),
+            })
             return existing, True
 
     # Step 9: Spam pre-check (skipped if honeypot already set)
@@ -166,6 +187,24 @@ async def submit_lead(
             create_enrichment_job(str(lead.id))
         except Exception:
             pass
+
+    if honeypot_triggered:
+        _audit_log("honeypot", widget_id, ip, {
+            "fingerprint": fingerprint,
+            "lead_id": str(lead.id),
+        })
+    elif spam_score >= 0.5:
+        _audit_log("spam_flagged", widget_id, ip, {
+            "fingerprint": fingerprint,
+            "lead_id": str(lead.id),
+            "spam_score": spam_score,
+            "spam_reasons": spam_reasons,
+        })
+    else:
+        _audit_log("success", widget_id, ip, {
+            "fingerprint": fingerprint,
+            "lead_id": str(lead.id),
+        })
 
     return lead, False
 

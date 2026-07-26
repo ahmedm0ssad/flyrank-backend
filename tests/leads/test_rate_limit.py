@@ -1,6 +1,6 @@
 import pytest
 
-from app.dependencies.leads import check_rate_limits, RATE_LIMIT_TIERS, RATE_LIMIT_WINDOW
+from app.dependencies.leads import check_rate_limits, RATE_LIMIT_TIERS, RATE_LIMIT_WINDOW, _in_process_limits
 
 
 class _FakeCountRedis:
@@ -37,6 +37,11 @@ class _FakePipeline:
             self._strings[key] = str(val)
             results.append(val)
         return results
+
+
+@pytest.fixture(autouse=True)
+def _clear_in_process_limits():
+    _in_process_limits.clear()
 
 
 @pytest.fixture
@@ -88,3 +93,32 @@ class TestRateLimits:
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
         retry_after = await check_rate_limits("1.2.3.4", "widget-1")
         assert retry_after is None
+
+    async def test_redis_down_in_process_blocks_after_limit(self, monkeypatch):
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
+
+        ip = "1.2.3.4"
+        limit = 100
+        for _ in range(limit + 1):
+            retry_after = await check_rate_limits(ip, "widget-1")
+        assert retry_after is not None, "in-process limiter should block after exceeding limit"
+
+    async def test_redis_down_in_process_per_ip_isolation(self, monkeypatch):
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
+
+        for _ in range(30):
+            await check_rate_limits("1.2.3.4", "widget-1")
+        retry_after = await check_rate_limits("5.6.7.8", "widget-1")
+        assert retry_after is None, "different IP should not be blocked"
+
+    async def test_redis_down_redis_error_falls_to_in_process(self, monkeypatch, monkey_redis):
+        original_pipeline = monkey_redis.pipeline
+
+        class BrokenRedis:
+            def pipeline(self):
+                raise Exception("Redis connection error")
+
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: BrokenRedis())
+
+        retry_after = await check_rate_limits("1.2.3.4", "widget-1")
+        assert retry_after is None, "should fall back to in-process limiter on Redis error"

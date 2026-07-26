@@ -1,8 +1,14 @@
+import asyncio
+import logging
+import time
+from collections import defaultdict
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
 
 from app.dependencies.embed import validate_origin
+
+logger = logging.getLogger(__name__)
 
 RATE_LIMIT_TIERS: list[tuple[str, int]] = [
     ("global_ip:{ip}:submit", 100),
@@ -22,6 +28,46 @@ def _get_redis():
         return None
 
 
+_in_process_limits: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_in_process(ip: str, widget_id: str) -> int | None:
+    now = time.time()
+    window = RATE_LIMIT_WINDOW
+    keys_and_limits = [
+        (f"ratelimit:global_ip:{ip}:submit", 100),
+        (f"ratelimit:widget_ip:{widget_id}:{ip}:submit", 30),
+        (f"ratelimit:widget_global:{widget_id}:submit", 1000),
+    ]
+
+    for key, limit in keys_and_limits:
+        _in_process_limits[key] = [t for t in _in_process_limits[key] if now - t < window]
+        if len(_in_process_limits[key]) >= limit:
+            return window
+        _in_process_limits[key].append(now)
+
+    return None
+
+
+async def _persist_rate_limit(ip: str, widget_id: str, tier_key: str, count: int) -> None:
+    try:
+        from app.core.database import get_pool, is_postgres_enabled
+
+        if not is_postgres_enabled():
+            return
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO rate_limits (ip_address, widget_id, scope, endpoint, window_start, count)
+                VALUES ($1::inet, $2::uuid, $3, 'submit', NOW(), $4)
+                """,
+                ip, widget_id, tier_key, count,
+            )
+    except Exception:
+        logger.debug("Failed to persist rate-limit decision (non-fatal): %s", exc_info=True)
+
+
 async def check_origin(request: Request, widget_id: UUID) -> None:
     valid = await validate_origin(request, widget_id)
     if not valid:
@@ -34,7 +80,7 @@ async def check_origin(request: Request, widget_id: UUID) -> None:
 async def check_rate_limits(ip: str, widget_id: str) -> int | None:
     redis = _get_redis()
     if redis is None:
-        return None
+        return _check_in_process(ip, widget_id)
 
     keys_and_limits = [
         (f"ratelimit:{key_template.format(ip=ip, widget_id=widget_id)}", limit)
@@ -57,4 +103,4 @@ async def check_rate_limits(ip: str, widget_id: str) -> int | None:
 
         return None
     except Exception:
-        return None
+        return _check_in_process(ip, widget_id)
