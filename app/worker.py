@@ -5,7 +5,7 @@ import sys
 import redis
 from rq import Worker
 
-from app.queue import QUEUE_NAME, REDIS_URL
+from app.queue import QUEUE_NAME, REDIS_URL, REPORT_QUEUE_NAME
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +28,7 @@ def run_worker():
         sys.exit(1)
         return
 
-    queues = [QUEUE_NAME]
+    queues = [QUEUE_NAME, REPORT_QUEUE_NAME]
     logger.info("Starting RQ worker for queues: %s", queues)
 
     worker = Worker(queues, connection=connection)
