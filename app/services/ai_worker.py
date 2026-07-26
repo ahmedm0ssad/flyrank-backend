@@ -19,7 +19,7 @@ def run_ai_job(payload: dict) -> str:
     job = get_current_job()
     job_id = job.id
 
-    logger.info("Job %s started", job_id)
+    logger.info("Job %s started (retries_left=%s)", job_id, job.retries_left)
     update_job(job_id, JobStatus.STARTED.value, started_at=_now())
 
     try:
@@ -41,16 +41,20 @@ def run_ai_job(payload: dict) -> str:
         job.save_meta()
 
         logger.warning(
-            "Job %s failed (attempt %d/%d): %s",
+            "Job %s failed (attempt %d/%d, retries_left=%s): %s",
             job_id,
             attempts,
             job.meta.get("max_retries", 3) + 1,
+            job.retries_left,
             exc,
         )
 
         if job.retries_left is not None and job.retries_left > 0:
             update_job(job_id, JobStatus.QUEUED.value)
-            logger.info("Job %s requeued for retry (attempt %d)", job_id, attempts)
+            logger.info(
+                "Job %s requeued for retry (attempt %d, retries_left=%s)",
+                job_id, attempts, job.retries_left,
+            )
         else:
             update_job(
                 job_id,

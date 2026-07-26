@@ -3,7 +3,9 @@ import os
 import sys
 
 import redis
+from dotenv import load_dotenv
 from rq import Worker
+from rq.worker import SimpleWorker
 
 from app.queue import QUEUE_NAME, REDIS_URL, REPORT_QUEUE_NAME
 
@@ -16,8 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def run_worker():
+    load_dotenv()
     redis_url = os.getenv("REDIS_URL", REDIS_URL)
     logger.info("Connecting to Redis at %s", redis_url)
+    groq_key = os.getenv("GROQ_API_KEY")
+    logger.info("GROQ_API_KEY present: %s", "yes" if groq_key else "no")
 
     try:
         connection = redis.from_url(redis_url, protocol=2)
@@ -31,7 +36,8 @@ def run_worker():
     queues = [QUEUE_NAME, REPORT_QUEUE_NAME]
     logger.info("Starting RQ worker for queues: %s", queues)
 
-    worker = Worker(queues, connection=connection)
+    worker_class = SimpleWorker if os.name == "nt" else Worker
+    worker = worker_class(queues, connection=connection)
     worker.work()
 
 
