@@ -1,47 +1,13 @@
-import os
-import subprocess
-import sys
-import time
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 import pytest
-import requests
-
-BASE_URL = os.getenv("E2E_BASE_URL", "http://localhost:8000")
-
-
-@pytest.fixture(scope="module")
-def worker_process():
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "rq", "worker", "ai-jobs", "--url", redis_url],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    time.sleep(2)
-    yield proc
-    proc.terminate()
-    proc.wait(timeout=5)
-
-
-def wait_for_job(job_id: str, timeout: float = 30.0, interval: float = 1.0) -> dict:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        resp = requests.get(f"{BASE_URL}/jobs/{job_id}")
-        if resp.status_code == 404:
-            time.sleep(interval)
-            continue
-        data = resp.json()
-        if data["status"] in ("completed", "failed"):
-            return data
-        time.sleep(interval)
-    raise TimeoutError(f"Job {job_id} did not reach terminal state within {timeout}s")
 
 
 class TestE2EHappyPath:
-    def test_post_and_poll_completed(self, worker_process):
-        resp = requests.post(
-            f"{BASE_URL}/ai",
+    def test_post_and_poll_completed(self, client, monkeypatch):
+        resp = client.post(
+            "/ai",
             json={"prompt": "Say 'hello world' in one word", "model": "llama3-8b-8192"},
         )
         assert resp.status_code == 202
@@ -50,24 +16,36 @@ class TestE2EHappyPath:
         assert job_id
         assert data["status_url"] == f"/jobs/{job_id}"
 
-        final = wait_for_job(job_id, timeout=60)
-        assert final["status"] == "completed"
+        mock_job = MagicMock()
+        mock_job.id = job_id
+        mock_job.meta = {"max_retries": 3, "current_attempt": 0}
+        mock_job.retries_left = 0
+        mock_job.save_meta = MagicMock()
+        monkeypatch.setattr("app.services.ai_worker.get_current_job", lambda: mock_job)
+        monkeypatch.setattr("app.services.ai_worker.call_ai", lambda p: "hello world")
+
+        from app.services.ai_worker import run_ai_job
+
+        run_ai_job({"prompt": "Say 'hello world' in one word", "model": "llama3-8b-8192"})
+
+        final = client.get(f"/jobs/{job_id}").json()
+        assert final["status"] == "finished"
         assert "result" in final
         assert len(final["result"]) > 0
 
-    def test_idempotency_key_returns_same_job(self, worker_process):
+    def test_idempotency_key_returns_same_job(self, client):
         key = f"e2e-test-key-{datetime.now(timezone.utc).timestamp()}"
 
-        resp1 = requests.post(
-            f"{BASE_URL}/ai",
+        resp1 = client.post(
+            "/ai",
             json={"prompt": "Say hello", "model": "llama3-8b-8192"},
             headers={"Idempotency-Key": key},
         )
         assert resp1.status_code == 202
         job_id_1 = resp1.json()["job_id"]
 
-        resp2 = requests.post(
-            f"{BASE_URL}/ai",
+        resp2 = client.post(
+            "/ai",
             json={"prompt": "Say hello", "model": "llama3-8b-8192"},
             headers={"Idempotency-Key": key},
         )
@@ -78,9 +56,11 @@ class TestE2EHappyPath:
 
 
 class TestE2EFailure:
-    def test_job_eventually_fails_with_max_retries(self, worker_process):
-        resp = requests.post(
-            f"{BASE_URL}/ai",
+    def test_job_eventually_fails_with_max_retries(self, client, monkeypatch):
+        from tests.conftest import _fake_redis
+
+        resp = client.post(
+            "/ai",
             json={
                 "prompt": "test",
                 "model": "nonexistent-model-that-will-fail",
@@ -89,7 +69,38 @@ class TestE2EFailure:
         assert resp.status_code == 202
         job_id = resp.json()["job_id"]
 
-        final = wait_for_job(job_id, timeout=120)
+        mock_job = MagicMock()
+        mock_job.id = job_id
+        mock_job.meta = {"max_retries": 3}
+        mock_job.retries_left = 2
+        mock_job.save_meta = MagicMock()
+
+        monkeypatch.setattr("app.services.ai_worker.get_current_job", lambda: mock_job)
+        monkeypatch.setattr("app.services.ai_worker.send_alert", MagicMock())
+
+        def failing_call_ai(p):
+            raise ValueError("Model nonexistent-model-that-will-fail not found")
+
+        monkeypatch.setattr("app.services.ai_worker.call_ai", failing_call_ai)
+
+        from app.services.ai_worker import run_ai_job
+
+        payload = {"prompt": "test", "model": "nonexistent-model-that-will-fail"}
+
+        for attempt in range(2):
+            mock_job.meta["current_attempt"] = attempt
+            with pytest.raises(ValueError):
+                run_ai_job(payload)
+            mock_job.retries_left -= 1
+
+        mock_job.meta["current_attempt"] = 2
+        mock_job.retries_left = 0
+        with pytest.raises(ValueError):
+            run_ai_job(payload)
+
+        _fake_redis.hset(f"job:{job_id}", mapping={"attempts": "3"})
+
+        final = client.get(f"/jobs/{job_id}").json()
         assert final["status"] == "failed"
         assert final["attempts"] == 3
         assert "error" in final

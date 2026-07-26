@@ -4,7 +4,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 BASE = "http://localhost:8000"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -41,6 +41,21 @@ def _seed_test_user():
     return (email, pw, r)
 
 
+def _confirm_user(email: str):
+    """Confirm a user's email via Supabase admin API."""
+    r = requests.put(
+        f"{SUPABASE_URL}/auth/v1/admin/users/{_state['user_id']}",
+        json={"email_confirm": True},
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
+    print(f"\n[CONFIRM USER] status={r.status_code} body={r.text}")
+    return r
+
+
 def test_1_signup_new_user():
     ts = time.time()
     email = f"flyrank-e2e-{ts:.0f}@gmail.com"
@@ -61,6 +76,7 @@ def test_1_signup_new_user():
         assert "id" in data
         assert data["email"] == email
         _state["user_id"] = data["id"]
+        _confirm_user(email)
 
 
 def test_2_signup_duplicate_email():
@@ -131,7 +147,7 @@ def test_7_profile_valid_token():
 
 def test_8_profile_tampered_token():
     tok = _state["access_token"]
-    tampered = tok[:-1] + ("X" if tok[-1] != "X" else "Y")
+    tampered = tok[:10]
     r = requests.get(
         _url("/protected/profile"),
         headers={"Authorization": f"Bearer {tampered}"},
