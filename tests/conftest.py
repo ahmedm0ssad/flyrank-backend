@@ -48,6 +48,10 @@ class _FakeRedis:
         ]
         return 0, keys
 
+    def delete(self, key):
+        self._strings.pop(key, None)
+        self._data.pop(key, None)
+
     def close(self):
         pass
 

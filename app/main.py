@@ -6,10 +6,12 @@ import redis.asyncio as redis_ai
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import close_pool, get_pool, is_postgres_enabled
+from app.embed.router import router as embed_router
 from app.routers import scrape, tasks
 from app.routers.ai import router as ai_router
 from app.routers.auth import auth_router, protected_router
@@ -72,6 +74,14 @@ app = FastAPI(
     swagger_ui_parameters={"persistAuthorization": True},
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
+)
+
 app.include_router(tasks.router)
 app.include_router(tasks.stats_router)
 app.include_router(scrape.router)
@@ -80,6 +90,7 @@ app.include_router(reports_router)
 app.include_router(auth_router)
 app.include_router(protected_router)
 app.include_router(widgets_router)
+app.include_router(embed_router)
 
 
 @app.exception_handler(RequestValidationError)
