@@ -34,8 +34,10 @@ _repo: LeadRepository | None = None
 _redis_client = None
 
 
-def _get_or_create_repo():
+def _get_or_create_repo(repo: LeadRepository | None = None):
     global _repo
+    if repo is not None:
+        _repo = repo
     if _repo is None:
         _repo = _get_repo()
     return _repo
