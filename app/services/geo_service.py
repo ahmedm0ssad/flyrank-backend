@@ -43,7 +43,7 @@ def set_cached_geo(ip: str, data: dict[str, Any]) -> None:
 async def _call_ipapi(ip: str) -> dict[str, Any] | None:
     url = IPAPI_CO_URL.format(ip=ip)
     try:
-        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+        async with httpx.AsyncClient() as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json()
@@ -73,7 +73,7 @@ async def _call_ipinfo(ip: str) -> dict[str, Any] | None:
         return None
     url = IPINFO_URL.format(ip=ip, token=token)
     try:
-        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+        async with httpx.AsyncClient() as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json()
@@ -94,7 +94,7 @@ async def _call_ipinfo(ip: str) -> dict[str, Any] | None:
 async def _call_ipapi_com(ip: str) -> dict[str, Any] | None:
     url = IPAPI_COM_URL.format(ip=ip)
     try:
-        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+        async with httpx.AsyncClient() as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json()
@@ -137,19 +137,13 @@ def geo_enrich(ip: str) -> dict[str, Any] | None:
         return cached
 
     async def _chain():
-        result = await _call_with_timeout(
-            _call_ipapi(ip), ip, "ipapi.co"
-        )
+        result = await _call_with_timeout(_call_ipapi(ip), ip, "ipapi.co")
         if result:
             return result
-        result = await _call_with_timeout(
-            _call_ipinfo(ip), ip, "ipinfo.io"
-        )
+        result = await _call_with_timeout(_call_ipinfo(ip), ip, "ipinfo.io")
         if result:
             return result
-        result = await _call_with_timeout(
-            _call_ipapi_com(ip), ip, "ip-api.com"
-        )
+        result = await _call_with_timeout(_call_ipapi_com(ip), ip, "ip-api.com")
         if result:
             return result
         return None
