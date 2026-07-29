@@ -22,6 +22,8 @@ from app.services.spam_service import score_submission
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("app.audit.submission")
 
+MAX_EXPORT_ROWS = 10000
+
 
 def _get_repo():
     return LeadRepository()
@@ -370,6 +372,7 @@ async def export_csv(
         date_from=date_from,
         date_to=date_to,
     )
+    leads = leads[:MAX_EXPORT_ROWS]
 
     output = io.StringIO()
     writer = csv.writer(output)
