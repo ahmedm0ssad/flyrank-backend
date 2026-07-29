@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import io
 import json
@@ -193,7 +194,8 @@ async def submit_lead(
         try:
             from app.core.queue import create_enrichment_job
 
-            create_enrichment_job(str(lead.id))
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, create_enrichment_job, str(lead.id))
         except Exception:
             pass
 
@@ -450,5 +452,6 @@ async def re_enrich_lead(lead_id: str, widget_id: str, tenant_id: str) -> dict:
             detail=f"Lead status is '{lead.status}', can only re-enrich 'failed' leads",
         )
 
-    create_enrichment_job(lead_id)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, create_enrichment_job, lead_id)
     return {"status": "re-enqueued", "lead_id": lead_id}
