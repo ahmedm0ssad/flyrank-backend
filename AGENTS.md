@@ -69,6 +69,17 @@ Single-file: `pytest tests/routers/test_ai.py -v` (works for any test path).
 - **Docker Redis**: mapped to host port **6380** (not 6379). Postgres on 5432.
 - **Groq mock**: when `GROQ_API_KEY` is unset, `call_ai` returns `"Mock response to: {prompt}"`.
 
+## Pre-commit guardrail
+
+This project has a history of unintended file bundling in fix commits (commits `2715feb` and `39e94a0` both swept up unrelated files via `git add -A`). **Before every commit**, run:
+
+```bash
+git status
+git diff --cached --stat
+```
+
+Visually confirm that only intended files are staged. If binary docs, PDFs, or unrelated source files appear, unstage them with `git reset HEAD -- <path>` before committing.
+
 ## ⚠️ .env contains real credentials
 
 `.env` has live `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`, and `GROQ_API_KEY`. **Do not commit `.env` or expose these values.**
