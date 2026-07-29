@@ -19,8 +19,8 @@
 |-----------|-------------|------|-----------|
 | `app/services/lead_service.py:186` | `create_enrichment_job` called without `await` from async handler | B | `create_enrichment_job` (`app/core/queue.py:181`) uses sync `redis.Redis` (`get_connection()` returns sync client). Calling a sync blocking function from an async FastAPI handler blocks the event loop. The `except Exception: pass` at line 188 silently swallows any error. Plan §7 expects enrichment to be enqueued asynchronously. |
 | `app/dependencies/leads.py:77-78` | EXPIRE calls outside the Redis pipeline — up to 3 extra round trips | B | Plan §8.3 specifies the 3-tier rate limiter must be "pipelined into a single Redis round trip, not 3 sequential calls." The INCRs are pipelined (lines 71-74) but the EXPIRE calls (lines 76-78) fire as separate `await redis.expire()` calls — up to 3 additional round trips per request when all tiers are first-hit. Fix: append EXPIRE commands to the same pipeline and execute once. |
-| `app/core/queue.py` | `reset_connection()` is missing | B (Pre-flagged) | Agent Guide §1 confirms this function is referenced in tests but does not exist. Current file (217 lines) has no such function. |
-| `app/core/queue.py` | `get_enrichment_job()` is missing | B (Pre-flagged) | Agent Guide §1 confirms this function is referenced in tests but not implemented. Current file has `create_enrichment_job`, `update_enrichment_job`, `get_enrichment_queue` but no `get_enrichment_job`. The M1 report (`m1-architecture.md:16`) had a stale line reference (`line 239`, which no longer exists in the current file) — the function simply doesn't exist. |
+| `app/core/queue.py` | `reset_connection()` was missing | B (Pre-flagged) | Removed without documentation in M6 commit `2715feb`. Restored in M6.5. |
+| `app/core/queue.py` | `get_enrichment_job()` was missing | B (Pre-flagged) | Removed without documentation in M6 commit `2715feb`. Restored in M6.5. |
 | `app/services/lead_service.py:356` | `export_csv` returns unbounded data | B | No `LIMIT`/`OFFSET` on export data. Plan §10.4 specifies pagination for all list endpoints but export has no page/page_size params. With large lead tables this will load all rows into memory and could OOM. Plan §6 (pipeline) shows export as a dashboard feature but doesn't address its pagination — add a max-row guard or streaming cursor. |
 
 ### Tier C — Flag Only (Requires Sign-off)
@@ -59,10 +59,10 @@ Source: `db/init.sql` vs `docs/implementation-plan.md` §3
 
 | Expected Function | Status in `app/core/queue.py` | Verdict |
 |-------------------|-------------------------------|---------|
-| `reset_connection()` | **MISSING** — not defined anywhere in the file | **FAIL — Tier B** |
-| `get_enrichment_job()` | **MISSING** — `create_enrichment_job`, `update_enrichment_job`, `get_enrichment_queue` exist but no `get_enrichment_job` | **FAIL — Tier B** |
+| `reset_connection()` | **RESTORED in M6.5** | **RESOLVED** |
+| `get_enrichment_job()` | **RESTORED in M6.5** | **RESOLVED** |
 
-Both gaps from the Agent Guide are confirmed. Neither function exists in the current code. The M1 report's line references (lines 44 and 239) are stale — the file has been modified since M1 was written, and neither function was ever implemented.
+**Note on git history:** Both functions were **live during M1** (fully implemented, see `git show 2715feb^:app/core/queue.py`). M1 was a read-only audit — it never touched code. The functions were removed only in M6 commit `2715feb` (mislabeled as a formatting fix). The original "stale" framing is contradicted by git history (verified by `docs/reviews/verification-audit-followup.md`). Both functions were restored in M6.5 — `reset_connection()` and `get_enrichment_job()` now exist in `app/core/queue.py`.
 
 ---
 
@@ -208,4 +208,4 @@ Cache is checked and short-circuits before any provider is called. ✓
 
 **Strengths**: Full index coverage, correct caching on all paths, matching background-job lifecycle, correct geo chain with proper timeouts and cache-first strategy.
 
-**Weaknesses**: EXPIRE calls not pipelined (violating plan §8.3 single-round-trip requirement), one blocking sync Redis call in async handler, export endpoint unbounded, two pre-flagged functions (`reset_connection`, `get_enrichment_job`) genuinely missing from `queue.py`.
+**Weaknesses**: EXPIRE calls not pipelined (violating plan §8.3 single-round-trip requirement), one blocking sync Redis call in async handler, export endpoint unbounded.

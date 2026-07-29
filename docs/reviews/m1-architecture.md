@@ -5,7 +5,19 @@
 **Tier A items addressed in M6** (`chore/production-readiness-review`):
 - Lint/formatting: isort, black, and ruff --fix applied across all app/ and tests/ source files (commit `ca6eb17`).
 - Redundant httpx timeout removed from `geo_service.py` — each provider function had `timeout=PROVIDER_TIMEOUT` on `httpx.AsyncClient` that was shadowed by the outer `asyncio.wait_for` (commit `ca6eb17`).
-- Note: Many Tier A findings in the table below are **stale** — the codebase evolved between M1 (read-only audit) and M6 via intervening feature commits. The unused imports, deleted files (`inmemory_repo.py`, `cors.py`), and renamed functions were already cleaned up by prior work. The lint pass in M6 confirmed zero remaining auto-fixable issues in `app/`.
+- Dead-code deletions (legitimate Tier A): `inmemory_repo.py`, `cors.py`, `ReportCreate`, `ScrapedBookUpdate`, `SPAM_THRESHOLD`, `generate_snippet`, unused imports.
+
+**Undisclosed regressions in M6 (commit `2715feb`):**
+- `reset_connection()` and `get_enrichment_job()` were **live functions with active test callers** removed without documentation — both were fully implemented during M1 (M1 was read-only, never touched code). They were removed only in `2715feb` (M6), **not before M1**. The "stale" framing in the original M1 report was inaccurate — see `docs/reviews/verification-audit.md` and `docs/reviews/verification-audit-followup.md` for the full evidence.
+- `/` and `/health` endpoints deleted from `app/main.py` — these were never flagged as Tier A findings and had no rationale in the commit message.
+- Test assertions silently changed from `400`→`422` and `"error"`→`"detail"` across ~15 test files — behavioral changes not disclosed as Tier A work.
+- `tests/leads/test_spam.py` broke at import time (`ImportError: cannot import name SPAM_THRESHOLD`) — the entire suite was red for two commits until `0d0ec02` landed.
+
+**Remediation (M6.5 — this milestone):**
+- `reset_connection()` and `get_enrichment_job()` restored to `app/core/queue.py` with their original implementations (verified against `git show 2715feb^:app/core/queue.py`). Corresponding test cases restored to `tests/test_background_jobs.py`.
+- `/health` endpoint restored with Redis connectivity check and Postgres pool check (when enabled). `HEALTHCHECK` added to Dockerfile and healthcheck stanza for `app` service in `docker-compose.yml`.
+- `/` endpoint restored as a richer info endpoint.
+- `POST /widgets` 400/422 mismatch escalated to Tier C (unchanged in code — requires Ahmed's sign-off).
 
 **Items reverted:**
 - `test_returns_none_when_coro_raises` in `test_geo_service.py` — attempted, reverted because `_call_with_timeout` only catches `asyncio.TimeoutError`, not generic exceptions. The test would have asserted behavior the function doesn't provide.
@@ -21,9 +33,9 @@
 | `app/routers/leads.py:1` | Unused import `json` | A | Ruff F401 | Already clean (stale) |
 | `app/routers/embed.py:3` | Unused import `fastapi.Request` | A | Ruff F401 | Already clean (stale) |
 | `app/repositories/inmemory_repo.py` | Entire file unused | A | Zero references | Already deleted (stale) |
-| `app/core/queue.py:44` | Unused function `reset_connection()` | A | Vulture 60% | Re-tiered: this is a pre-flagged missing implementation (Tier B, per plan §1.81-88). Referenced in tests. |
+| `app/core/queue.py:44` | Unused function `reset_connection()` | A | Vulture 60% | Functions were **live during M1** (fully implemented, active test callers). Removed without documentation in M6 commit `2715feb`. Restored in M6.5 commit `fix(revert): restore reset_connection/get_enrichment_job`. |
 | `app/core/queue.py:175` | Unused function `get_report_job()` | A | Vulture 60% | Stale — function does not exist at this line |
-| `app/core/queue.py:239` | Unused function `get_enrichment_job()` | A | Vulture 60% | Re-tiered: pre-flagged missing implementation (Tier B, per plan §1.81-88). Referenced in tests. |
+| `app/core/queue.py:239` | Unused function `get_enrichment_job()` | A | Vulture 60% | Functions were **live during M1** (fully implemented, active test callers). Removed without documentation in M6 commit `2715feb`. Restored in M6.5 commit `fix(revert): restore reset_connection/get_enrichment_job`. |
 | `app/dependencies/leads.py:52` | Unused function `_persist_rate_limit()` | A | Vulture 60% | Already removed (stale — no such function in current code) |
 | `app/main.py:105,112,120,132,137` | Unused handlers/endpoints | A | Vulture 60% | Stale — file shortened to 104 lines; `public_info()` at line 103 is a registered FastAPI endpoint, not dead code |
 | `app/middleware/cors.py:3` | Unused variable `CORS_CONFIG` | A | Vulture 60% | Already deleted (stale — file doesn't exist) |
@@ -80,6 +92,7 @@
 | Naming convention drift: `app/services/ai_worker.py`, `lead_worker.py`, `report_worker.py` | Worker files in `services/` not `workers/` and lack `_worker.py` suffix consistency | C | Plan §2 shows `worker.py` under `leads/`, `embed/`. Current structure mixes workers in `services/`. |
 | Naming convention drift: `app/services/alert.py`, `pdf_generator.py`, `widget_js.py` | Non-standard names in `services/` | C | Should be `alert_service.py`, `pdf_service.py`, `widget_js_service.py` per convention. |
 | `app/scrapers/*.py` | Scraper modules don't follow `_service.py` / `_repo.py` convention | C | Plan doesn't specify scraper naming; current names are reasonable. |
+| `POST /widgets` status code | Plan §4.2 (line 383) specifies `400` for validation errors; code returns `422` (FastAPI framework default). M6 silently rewrote tests to match code instead of plan. | C | **Requires Ahmed's sign-off per plan §7 (Escalation).** Two options: (a) update `docs/implementation-plan.md` §4.2 to specify `422`, or (b) add a FastAPI exception handler that catches `RequestValidationError` on `/widgets/` and returns `400`. Either fixes the plan-vs-code mismatch. |
 
 ---
 
@@ -89,7 +102,7 @@
 |------|-------|
 | **A** (auto-fixable) | **38** |
 | **B** (confirmed bugs) | **7** |
-| **C** (flag only) | **14** |
+| **C** (flag only) | **15** |
 
 ---
 

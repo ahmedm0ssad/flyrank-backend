@@ -262,10 +262,10 @@ New tests only add coverage — they never change behavior.
 
 ## 5. Additional Gap: Known Pre-flagged Issues (from Agent Guide)
 
-| Issue | Confirmation | Tier |
+| Issue (as of M4) | Resolution | Tier |
 |-------|-------------|------|
-| `queue.reset_connection()` called in tests but does not exist in `app/core/queue.py` | Confirmed — `tests/test_background_jobs.py` calls it, function missing | **B** (implementation gap) |
-| `queue.get_enrichment_job()` referenced in tests but not implemented in `app/core/queue.py` | Confirmed — `tests/test_background_jobs.py` calls it, function missing | **B** (implementation gap) |
+| `queue.reset_connection()` called in tests but did not exist in `app/core/queue.py` | Removed without documentation in M6 commit `2715feb`. **Restored** in M6.5 — both function and tests now present. | **B** (resolved) |
+| `queue.get_enrichment_job()` referenced in tests but not implemented in `app/core/queue.py` | Removed without documentation in M6 commit `2715feb`. **Restored** in M6.5 — both function and tests now present. | **B** (resolved) |
 
 ---
 
@@ -291,6 +291,6 @@ New tests only add coverage — they never change behavior.
 - 40+ specific missing test cases identified (all Tier A)
 - Coverage drops below 80% on several modules (database.py 42%, supabase.py 71%, report_repo.py 64%, main.py 61%)
 - Scrapers have 0–9% coverage (not in scope for this review, but drags overall number)
-- No test marks 2 known missing functions (`reset_connection`, `get_enrichment_job`)
+- Both `reset_connection()` and `get_enrichment_job()` were restored in M6.5 with corresponding tests — no longer missing
 
 **Conclusion:** Solid baseline with excellent coverage on lead-capture code paths. Gaps are in edge cases, failure paths, auth checks, and a handful of missing unit tests. Tier A additions would bring this to 8–8.5/10. The two known implementation gaps (Tier B) need code fixes before their tests can pass.
