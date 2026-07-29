@@ -10,14 +10,15 @@
 **Undisclosed regressions in M6 (commit `2715feb`):**
 - `reset_connection()` and `get_enrichment_job()` were **live functions with active test callers** removed without documentation — both were fully implemented during M1 (M1 was read-only, never touched code). They were removed only in `2715feb` (M6), **not before M1**. The "stale" framing in the original M1 report was inaccurate — see `docs/reviews/verification-audit.md` and `docs/reviews/verification-audit-followup.md` for the full evidence.
 - `/` and `/health` endpoints deleted from `app/main.py` — these were never flagged as Tier A findings and had no rationale in the commit message.
-- Test assertions silently changed from `400`→`422` and `"error"`→`"detail"` across ~15 test files — behavioral changes not disclosed as Tier A work.
+- Custom `RequestValidationError` and `StarletteHTTPException` handlers deleted from `app/main.py` — changed validation error responses from `400` + `{"error": ...}` to `422` + `{"detail": ...}` across the entire API. This was the root cause of the 400→422 and `error`→`detail` changes in ~15 test files. Three plan-specified endpoints (`POST /widgets/`, `PUT /widgets/{id}`, `POST /public/widget/{widget_id}/submit`) whose plan says `400` now return `422` — escalated to Tier C.
+- `lead_service.py`: added `re_enrich_lead()` function (new service method) and removed unused `_set_redis()` + `widget_service` import (Tier A legit). `widget.py`: replaced standalone `_validate_config()`/`_validate_domain()` functions with Pydantic `@field_validator` decorators (structural refactor beyond formatting).
 - `tests/leads/test_spam.py` broke at import time (`ImportError: cannot import name SPAM_THRESHOLD`) — the entire suite was red for two commits until `0d0ec02` landed.
 
 **Remediation (M6.5 — this milestone):**
 - `reset_connection()` and `get_enrichment_job()` restored to `app/core/queue.py` with their original implementations (verified against `git show 2715feb^:app/core/queue.py`). Corresponding test cases restored to `tests/test_background_jobs.py`.
 - `/health` endpoint restored with Redis connectivity check and Postgres pool check (when enabled). `HEALTHCHECK` added to Dockerfile and healthcheck stanza for `app` service in `docker-compose.yml`.
 - `/` endpoint restored as a richer info endpoint.
-- `POST /widgets` 400/422 mismatch escalated to Tier C (unchanged in code — requires Ahmed's sign-off).
+- `POST /widgets` 400/422 mismatch escalated to Tier C (unchanged in code — requires Ahmed's sign-off). M6.6 expanded Tier C to cover all three plan-specified endpoints (also `PUT /widgets/{id}` and `POST /public/widget/{widget_id}/submit`).
 
 **Items reverted:**
 - `test_returns_none_when_coro_raises` in `test_geo_service.py` — attempted, reverted because `_call_with_timeout` only catches `asyncio.TimeoutError`, not generic exceptions. The test would have asserted behavior the function doesn't provide.
@@ -92,7 +93,7 @@
 | Naming convention drift: `app/services/ai_worker.py`, `lead_worker.py`, `report_worker.py` | Worker files in `services/` not `workers/` and lack `_worker.py` suffix consistency | C | Plan §2 shows `worker.py` under `leads/`, `embed/`. Current structure mixes workers in `services/`. |
 | Naming convention drift: `app/services/alert.py`, `pdf_generator.py`, `widget_js.py` | Non-standard names in `services/` | C | Should be `alert_service.py`, `pdf_service.py`, `widget_js_service.py` per convention. |
 | `app/scrapers/*.py` | Scraper modules don't follow `_service.py` / `_repo.py` convention | C | Plan doesn't specify scraper naming; current names are reasonable. |
-| `POST /widgets` status code | Plan §4.2 (line 383) specifies `400` for validation errors; code returns `422` (FastAPI framework default). M6 silently rewrote tests to match code instead of plan. | C | **Requires Ahmed's sign-off per plan §7 (Escalation).** Two options: (a) update `docs/implementation-plan.md` §4.2 to specify `422`, or (b) add a FastAPI exception handler that catches `RequestValidationError` on `/widgets/` and returns `400`. Either fixes the plan-vs-code mismatch. |
+| Validation error status codes (3 endpoints) | M6 commit `2715feb` deleted the custom `RequestValidationError` handler and `StarletteHTTPException` handler from `app/main.py` (which returned `400` + `{"error": ...}`). After deletion, all validation errors return FastAPI's default `422` + `{"detail": ...}`. Three endpoints have plan-specified `400` that now return `422`: `POST /widgets/` (§4.2, line 383), `PUT /widgets/{id}` (§4.2, line 399), `POST /public/widget/{widget_id}/submit` (§3, line 319). | C | **Requires Ahmed's sign-off per plan §7 (Escalation).** Options: (a) update plan to document `422` for all three endpoints, or (b) restore a `RequestValidationError` handler returning `400` with `{"detail": ...}` (or `{"error": ...}`) — but this affects the entire API, not just the three endpoints. If (b), the handler was already intentionally removed in M6 (perhaps because `422` + `{"detail": ...}` is the standard FastAPI/OpenAPI convention). If (a), the plan §4.2, §4.2 PUT, and §3 submit sections all need line-level updates. |
 
 ---
 
