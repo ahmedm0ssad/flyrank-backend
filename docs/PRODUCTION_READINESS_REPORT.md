@@ -400,4 +400,4 @@ All documentation gaps are Tier C (requires sign-off).
 
 ---
 
-*End of Production Readiness Report. 618 tests passing (M8 live-verified: 16/16 endpoints functional, 2 confirmed Postgres bugs), 29 Tier C items awaiting sign-off (1 duplicate removed M8.1), 2 critical Postgres bugs identified during final verification (§6 #27–#28).*
+*End of Production Readiness Report. 618 tests passing (M8.2 live-verified against SQLite: honeypot ✓, rate-limit ✓, fingerprint dedup ✓, origin-validation ✓, dashboard auth ✓, dashboard stats/list/export ✓, enrichment lifecycle ✓ — see M8.2 commit message for full request/response pairs; M8.1 confirmed #27 health-check await bug and #28 Postgres config-bug return 500 on 3 endpoints), 29 Tier C items awaiting sign-off (1 duplicate removed M8.1), 2 critical Postgres bugs identified during final verification (§6 #27–#28).*
