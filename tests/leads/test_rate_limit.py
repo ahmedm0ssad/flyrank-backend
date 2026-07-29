@@ -30,15 +30,22 @@ class _FakePipeline:
         self._cmds = []
 
     def incr(self, key):
-        self._cmds.append(key)
+        self._cmds.append(("incr", key))
+        return self
+
+    def expire(self, key, ttl):
+        self._cmds.append(("expire", key))
         return self
 
     async def execute(self):
         results = []
-        for key in self._cmds:
-            val = int(self._strings.get(key, 0)) + 1
-            self._strings[key] = str(val)
-            results.append(val)
+        for cmd, key in self._cmds:
+            if cmd == "incr":
+                val = int(self._strings.get(key, 0)) + 1
+                self._strings[key] = str(val)
+                results.append(val)
+            else:
+                results.append(True)
         return results
 
 
@@ -115,6 +122,21 @@ class TestRateLimits:
             await check_rate_limits("1.2.3.4", "widget-1")
         retry_after = await check_rate_limits("5.6.7.8", "widget-1")
         assert retry_after is None, "different IP should not be blocked"
+
+    async def test_redis_pipeline_widget_ip_triggers_limit(self, monkey_redis):
+        """Cover lines 77-84: pipeline.execute(), count extraction via
+        [::2], limit comparison, and return of RATE_LIMIT_WINDOW."""
+        ip = "10.0.0.1"
+        widget = "widget-wip"
+        limit = 30
+
+        for _ in range(limit):
+            retry = await check_rate_limits(ip, widget)
+            assert retry is None
+
+        retry = await check_rate_limits(ip, widget)
+        assert retry is not None
+        assert retry == 60, "should return RATE_LIMIT_WINDOW (=60)"
 
     async def test_redis_down_redis_error_falls_to_in_process(
         self, monkeypatch, monkey_redis
