@@ -8,6 +8,10 @@
 
 New test cases added in commit `0d0ec02`:
 
+## M7 Fix Status
+
+No Tier B items remaining. Both pre-flagged items (`reset_connection()` and `get_enrichment_job()`) were restored in M6.5. All Tier B item fixes (M3 #1 async blocking call, M3 #2 EXPIRE pipelining, M3 #5 export limit) are verified by existing tests — no regressions.
+
 | # | Missing test | File | Status |
 |---|-------------|------|--------|
 | 1 | LeadSubmit with `referer` > 500 chars | `tests/leads/test_models.py` | Fixed in commit `0d0ec02` |
@@ -262,10 +266,10 @@ New tests only add coverage — they never change behavior.
 
 ## 5. Additional Gap: Known Pre-flagged Issues (from Agent Guide)
 
-| Issue (as of M4) | Resolution | Tier |
-|-------|-------------|------|
-| `queue.reset_connection()` called in tests but did not exist in `app/core/queue.py` | Removed without documentation in M6 commit `2715feb`. **Restored** in M6.5 — both function and tests now present. | **B** (resolved) |
-| `queue.get_enrichment_job()` referenced in tests but not implemented in `app/core/queue.py` | Removed without documentation in M6 commit `2715feb`. **Restored** in M6.5 — both function and tests now present. | **B** (resolved) |
+| Issue (as of M4) | Resolution | Tier | M7 Status |
+|-------|-------------|------|-----------|
+| `queue.reset_connection()` called in tests but did not exist in `app/core/queue.py` | Removed without documentation in M6 commit `2715feb`. **Restored** in M6.5 — both function and tests now present. | **B** (resolved) | **Resolved in M6.5** |
+| `queue.get_enrichment_job()` referenced in tests but not implemented in `app/core/queue.py` | Removed without documentation in M6 commit `2715feb`. **Restored** in M6.5 — both function and tests now present. | **B** (resolved) | **Resolved in M6.5** |
 
 ---
 

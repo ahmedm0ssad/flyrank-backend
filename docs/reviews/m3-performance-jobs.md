@@ -5,6 +5,18 @@
 **Tier A items addressed in M6** (`chore/production-readiness-review`):
 - Redundant `timeout=PROVIDER_TIMEOUT` removed from all three provider functions (`_call_ipapi`, `_call_ipinfo`, `_call_ipapi_com`) in commit `ca6eb17`. The outer `asyncio.wait_for` at `_call_with_timeout` is the effective timeout.
 
+## M7 Fix Status
+
+**Tier B items addressed in M7** (`chore/production-readiness-review`):
+
+| # | Finding | Outcome | Commit |
+|---|---------|---------|--------|
+| 1 | `lead_service.py:186` — `create_enrichment_job` without `await` blocking event loop | **Fixed** — wrapped both `submit_lead` and `re_enrich_lead` calls in `asyncio.run_in_executor`. Sync `redis.Redis` calls no longer block the async event loop. | `fd89399` |
+| 2 | `leads.py:77-78` — EXPIRE calls outside Redis pipeline (up to +3 round trips) | **Fixed** — EXPIRE commands moved into the same pipeline as INCRs. Worst case reduced from 4 to 1 round trip, matching plan §8.3. | `39e94a0` |
+| 3 | `queue.py` — `reset_connection()` was missing (pre-flagged) | **Restored in M6.5** — both function and test cases present. | N/A |
+| 4 | `queue.py` — `get_enrichment_job()` was missing (pre-flagged) | **Restored in M6.5** — both function and test cases present. | N/A |
+| 5 | `lead_service.py:356` — `export_csv` returns unbounded data | **Fixed** — added `MAX_EXPORT_ROWS = 10000` safety cap at the service layer. Protects against OOM on large lead tables. | `b91104a` |
+
 ## Findings List
 
 ### Tier A — Auto-fixable
@@ -15,13 +27,13 @@
 
 ### Tier B — Confirmed Bugs / Architecture Violations
 
-| File:Line | Description | Tier | Reasoning |
-|-----------|-------------|------|-----------|
-| `app/services/lead_service.py:186` | `create_enrichment_job` called without `await` from async handler | B | `create_enrichment_job` (`app/core/queue.py:181`) uses sync `redis.Redis` (`get_connection()` returns sync client). Calling a sync blocking function from an async FastAPI handler blocks the event loop. The `except Exception: pass` at line 188 silently swallows any error. Plan §7 expects enrichment to be enqueued asynchronously. |
-| `app/dependencies/leads.py:77-78` | EXPIRE calls outside the Redis pipeline — up to 3 extra round trips | B | Plan §8.3 specifies the 3-tier rate limiter must be "pipelined into a single Redis round trip, not 3 sequential calls." The INCRs are pipelined (lines 71-74) but the EXPIRE calls (lines 76-78) fire as separate `await redis.expire()` calls — up to 3 additional round trips per request when all tiers are first-hit. Fix: append EXPIRE commands to the same pipeline and execute once. |
-| `app/core/queue.py` | `reset_connection()` was missing | B (Pre-flagged) | Removed without documentation in M6 commit `2715feb`. Restored in M6.5. |
-| `app/core/queue.py` | `get_enrichment_job()` was missing | B (Pre-flagged) | Removed without documentation in M6 commit `2715feb`. Restored in M6.5. |
-| `app/services/lead_service.py:356` | `export_csv` returns unbounded data | B | No `LIMIT`/`OFFSET` on export data. Plan §10.4 specifies pagination for all list endpoints but export has no page/page_size params. With large lead tables this will load all rows into memory and could OOM. Plan §6 (pipeline) shows export as a dashboard feature but doesn't address its pagination — add a max-row guard or streaming cursor. |
+| File:Line | Description | Tier | Reasoning | M7 Status |
+|-----------|-------------|------|-----------|-----------|
+| `app/services/lead_service.py:186` | `create_enrichment_job` called without `await` from async handler | B | `create_enrichment_job` (`app/core/queue.py:181`) uses sync `redis.Redis` (`get_connection()` returns sync client). Calling a sync blocking function from an async FastAPI handler blocks the event loop. The `except Exception: pass` at line 188 silently swallows any error. Plan §7 expects enrichment to be enqueued asynchronously. | **Fixed** in commit `fd89399`. Wrapped in `asyncio.run_in_executor` and awaited. |
+| `app/dependencies/leads.py:77-78` | EXPIRE calls outside the Redis pipeline — up to 3 extra round trips | B | Plan §8.3 specifies the 3-tier rate limiter must be "pipelined into a single Redis round trip, not 3 sequential calls." The INCRs are pipelined (lines 71-74) but the EXPIRE calls (lines 76-78) fire as separate `await redis.expire()` calls — up to 3 additional round trips per request when all tiers are first-hit. Fix: append EXPIRE commands to the same pipeline and execute once. | **Fixed** in commit `39e94a0`. EXPIRE commands added to the same pipeline as INCRs. |
+| `app/core/queue.py` | `reset_connection()` was missing | B (Pre-flagged) | Removed without documentation in M6 commit `2715feb`. Restored in M6.5. | **Restored in M6.5** — function and test cases present. |
+| `app/core/queue.py` | `get_enrichment_job()` was missing | B (Pre-flagged) | Removed without documentation in M6 commit `2715feb`. Restored in M6.5. | **Restored in M6.5** — function and test cases present. |
+| `app/services/lead_service.py:356` | `export_csv` returns unbounded data | B | No `LIMIT`/`OFFSET` on export data. Plan §10.4 specifies pagination for all list endpoints but export has no page/page_size params. With large lead tables this will load all rows into memory and could OOM. Plan §6 (pipeline) shows export as a dashboard feature but doesn't address its pagination — add a max-row guard or streaming cursor. | **Fixed** in commit `b91104a`. Added `MAX_EXPORT_ROWS = 10000` service-layer cap. |
 
 ### Tier C — Flag Only (Requires Sign-off)
 

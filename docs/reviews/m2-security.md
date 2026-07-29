@@ -4,6 +4,10 @@
 
 No Tier A findings in this report. All items are either Tier B (pre-flagged missing implementations) or Tier C (requires sign-off). No changes applied.
 
+## M7 Fix Status
+
+No Tier B items remaining. Both pre-flagged items (`reset_connection()` and `get_enrichment_job()`) were restored in M6.5.
+
 ## 1. Origin Validation (`app/dependencies/embed.py`) — *Plan §8.2*
 
 **Result: PASS — no substring bug.**
@@ -260,8 +264,8 @@ The following routes exist without `get_current_user` but are **not dashboard ro
 
 | File:Line | Description | Plan Section |
 |---|---|---|
-| `app/core/queue.py` | `reset_connection()` called in tests but not implemented (pre-flagged, §1.81-88) | §1.81-88 — **Restored** in commit `5a386e9` (M6.5) after being incorrectly removed in `2715feb`; `tests/test_background_jobs.py` (46 tests) passes. See `docs/reviews/verification-audit.md` §1 for full git-history confirmation. |
-| `app/core/queue.py` | `get_enrichment_job()` referenced in tests but not implemented (pre-flagged, §1.81-88) | §1.81-88 — **Restored** in commit `5a386e9` (M6.5) after being incorrectly removed in `2715feb`; `tests/test_background_jobs.py` (46 tests) passes. See `docs/reviews/verification-audit.md` §1 for full git-history confirmation. |
+| `app/core/queue.py` | `reset_connection()` called in tests but not implemented (pre-flagged, §1.81-88) | §1.81-88 — **Restored** in commit `5a386e9` (M6.5) after being incorrectly removed in `2715feb`; `tests/test_background_jobs.py` (46 tests) passes. See `docs/reviews/verification-audit.md` §1 for full git-history confirmation. | **Resolved in M6.5** |
+| `app/core/queue.py` | `get_enrichment_job()` referenced in tests but not implemented (pre-flagged, §1.81-88) | §1.81-88 — **Restored** in commit `5a386e9` (M6.5) after being incorrectly removed in `2715feb`; `tests/test_background_jobs.py` (46 tests) passes. See `docs/reviews/verification-audit.md` §1 for full git-history confirmation. | **Resolved in M6.5** |
 
 ### Tier C — Flag Only
 

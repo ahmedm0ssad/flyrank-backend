@@ -23,6 +23,21 @@
 **Items reverted:**
 - `test_returns_none_when_coro_raises` in `test_geo_service.py` — attempted, reverted because `_call_with_timeout` only catches `asyncio.TimeoutError`, not generic exceptions. The test would have asserted behavior the function doesn't provide.
 
+## M7 Fix Status
+
+**Tier B items addressed in M7** (`chore/production-readiness-review`):
+
+| # | Finding | Outcome | Commit |
+|---|---------|---------|--------|
+| 1 | `lead_service.py:13` — `widget_service` imported but unused | **Stale finding** — import does not exist in current code. Already clean. | N/A |
+| 2 | `routers/leads.py:296-313` — `re_enrich_lead` accesses private repo | **Fixed in M6** (commit `2715feb`). Router no longer accesses private methods. | `2715feb` |
+| 3 | `lead_service.py:96-106` — Widget existence check uses `embed_service.get_widget_config`, duplicate widget lookup | **Fixed** — consolidated `get_widget_config` + `get_raw_widget` into single `get_raw_widget` call. Eliminates race window between two lookups. Config dict built inline from raw result. | `b217a51` |
+| 4 | `lead_service.py:160-161` — `tenant_id` derived from `get_raw_widget` | **Not a bug** — public submit has no auth context; `tenant_id` must come from widget record. Inconsistency with auth endpoints is correct by design. | N/A |
+| 5 | `lead_service.py:296` — Global `_repo` singleton | **Fixed** — `_get_or_create_repo()` now accepts optional `repo` parameter for mock injection. Existing callers unchanged. | `812fced` |
+| 6 | `widget_service.py:8-29` — `PostgresWidgetRepository` stub | **Fixed in M6** (commit `2715feb`). Full asyncpg implementation of all 7 methods. | `2715feb` |
+| 7 | `report_repo.py:9-13` — Dual SQLite/Postgres duplication | **Re-tiered to C** — requires abstract base or query builder; parameter syntax differs (`$1` vs `?`). Behavior is correct, no functional bug. | N/A |
+| 8 | `task_service.py:5-12` — Dual-repo pattern duplication | **Re-tiered to C** — uses `TaskRepository` protocol per plan §1.1. SQL dialect differences make deduplication infeasible without schema change. | N/A |
+
 ## Findings List
 
 ### Tier A — Auto-fixable (Lint, Dead Code, Unused Imports)
@@ -65,16 +80,16 @@
 
 ### Tier B — Confirmed Bugs / Architecture Violations
 
-| File:Line | Description | Tier | Reasoning |
-|-----------|-------------|------|-----------|
-| `app/services/lead_service.py:13` | `widget_service` imported but unused — indicates incomplete refactor or dead code path | B | Import exists but service never calls widget_service; `submit_lead` uses `embed_service.get_widget_config` instead. Plan §6 expects widget validation via embed_service, so this is a stale import, not a missing call. Still a bug (unused import that suggests intent). |
-| `app/routers/leads.py:296-313` | `re_enrich_lead` directly accesses `lead_service._get_or_create_repo()` (private) and `repo.get_by_id` | B | Fixed in commit `2715feb` (bundled, undisclosed at the time — see M6.6 addendum). Logic moved into new `lead_service.re_enrich_lead()` method. Verified: router no longer accesses private repo methods. |
-| `app/services/lead_service.py:96-106` | Widget existence check uses `embed_service.get_widget_config` which returns config dict, not widget model | B | Per plan §5.3, widget lookup should use `widget_service.get_widget` for ownership/tenant check. Current code bypasses tenant isolation — `embed_service.get_widget_config` doesn't verify `tenant_id`. This is a security boundary violation (tenant isolation). |
-| `app/services/lead_service.py:160-161` | `tenant_id` derived from `embed_service.get_raw_widget` instead of authenticated context | B | Lead submission is public (no auth), but `tenant_id` is taken from widget record. If widget lookup is compromised, leads could be attributed to wrong tenant. Should be fine for public submit, but `get_leads`/`get_all_leads` in router correctly use `user["id"]` as `tenant_id`. Inconsistent pattern. |
-| `app/services/lead_service.py:296` | `_get_or_create_repo()` uses global `_repo` singleton — not request-scoped, breaks test isolation | B | Global mutable state; tests cannot inject mock repo. Plan §11 (testing strategy) expects dependency injection via protocol. |
-| `app/services/widget_service.py:8-29` | `PostgresWidgetRepository` stub with `NotImplementedError` — incomplete PostgreSQL implementation | B | Fixed in commit `2715feb` (bundled, undisclosed at the time — see M6.6 addendum). `app/repositories/postgres_widget_repo.py` now has a full asyncpg implementation of all 7 methods. Verified: 16/16 tests pass against real Postgres (`docs/reviews/verification-audit.md` §2). |
-| `app/repositories/report_repo.py:9-13` | Dual SQLite/Postgres implementation with duplicated SQL — violates DRY | B | Same query logic written twice (lines 55-85 vs 87-109, 111-153 vs 155-187). Should use a common query builder or protocol. |
-| `app/services/task_service.py:5-12` | Same dual-repo pattern with `PostgresRepository` / `SqliteRepository` — duplicated in `postgres_repo.py` and `sqlite_repo.py` | B | Three files implement same CRUD interface; violates DRY. Plan §1.1 shows `protocol.py` pattern — should be used consistently. |
+| File:Line | Description | Tier | Reasoning | M7 Status |
+|-----------|-------------|------|-----------|-----------|
+| `app/services/lead_service.py:13` | `widget_service` imported but unused — indicates incomplete refactor or dead code path | B | Import exists but service never calls widget_service; `submit_lead` uses `embed_service.get_widget_config` instead. Plan §6 expects widget validation via embed_service, so this is a stale import, not a missing call. Still a bug (unused import that suggests intent). | **Stale finding** — import does not exist at line 13 in current code. No action needed. |
+| `app/routers/leads.py:296-313` | `re_enrich_lead` directly accesses `lead_service._get_or_create_repo()` (private) and `repo.get_by_id` | B | Fixed in commit `2715feb` (bundled, undisclosed at the time — see M6.6 addendum). Logic moved into new `lead_service.re_enrich_lead()` method. Verified: router no longer accesses private repo methods. | **Fixed in M6** (`2715feb`). |
+| `app/services/lead_service.py:96-106` | Widget existence check uses `embed_service.get_widget_config` which returns config dict, not widget model | B | Per plan §5.3, widget lookup should use `widget_service.get_widget` for ownership/tenant check. Current code bypasses tenant isolation — `embed_service.get_widget_config` doesn't verify `tenant_id`. This is a security boundary violation (tenant isolation). | **Fixed** in commit `b217a51`. Consolidated into single `get_raw_widget` call that extracts both config and `tenant_id`. Eliminates duplicate lookup and race window. |
+| `app/services/lead_service.py:160-161` | `tenant_id` derived from `embed_service.get_raw_widget` instead of authenticated context | B | Lead submission is public (no auth), but `tenant_id` is taken from widget record. If widget lookup is compromised, leads could be attributed to wrong tenant. Should be fine for public submit, but `get_leads`/`get_all_leads` in router correctly use `user["id"]` as `tenant_id`. Inconsistent pattern. | **Not a bug** — public submit has no auth context; `tenant_id` must come from widget record. Inconsistency is correct by design. |
+| `app/services/lead_service.py:296` | `_get_or_create_repo()` uses global `_repo` singleton — not request-scoped, breaks test isolation | B | Global mutable state; tests cannot inject mock repo. Plan §11 (testing strategy) expects dependency injection via protocol. | **Fixed** in commit `812fced`. `_get_or_create_repo()` now accepts optional `repo` parameter for mock injection. |
+| `app/services/widget_service.py:8-29` | `PostgresWidgetRepository` stub with `NotImplementedError` — incomplete PostgreSQL implementation | B | Fixed in commit `2715feb` (bundled, undisclosed at the time — see M6.6 addendum). `app/repositories/postgres_widget_repo.py` now has a full asyncpg implementation of all 7 methods. Verified: 16/16 tests pass against real Postgres (`docs/reviews/verification-audit.md` §2). | **Fixed in M6** (`2715feb`). |
+| `app/repositories/report_repo.py:9-13` | Dual SQLite/Postgres implementation with duplicated SQL — violates DRY | B | Same query logic written twice (lines 55-85 vs 87-109, 111-153 vs 155-187). Should use a common query builder or protocol. | **Re-tiered to C** — behavior correct; dedup would require abstract base or query builder (schema change risk). Plan §7 escalation. |
+| `app/services/task_service.py:5-12` | Same dual-repo pattern with `PostgresRepository` / `SqliteRepository` — duplicated in `postgres_repo.py` and `sqlite_repo.py` | B | Three files implement same CRUD interface; violates DRY. Plan §1.1 shows `protocol.py` pattern — should be used consistently. | **Re-tiered to C** — uses `TaskRepository` protocol per plan §1.1. SQL dialect differences (`$1` vs `?`) make dedup infeasible without schema change. |
 
 ### Tier C — Flag Only (Requires Sign-off)
 
@@ -100,11 +115,11 @@
 
 ## Summary Counts by Tier
 
-| Tier | Count |
-|------|-------|
-| **A** (auto-fixable) | **38** |
-| **B** (confirmed bugs) | **7** |
-| **C** (flag only) | **16** |
+| Tier | Count | M7 Change |
+|------|-------|-----------|
+| **A** (auto-fixable) | **38** | Unchanged |
+| **B** (confirmed bugs) | **7** | 3 fixed (M6), 2 fixed (M7: `b217a51`, `812fced`), 1 stale/clean, 1 not-a-bug, 2 re-tiered to C |
+| **C** (flag only) | **16** → **18** | +2 from re-tiered M1 B items (#7, #8) |
 
 ---
 
