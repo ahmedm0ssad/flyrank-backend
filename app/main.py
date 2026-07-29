@@ -118,7 +118,8 @@ async def health():
         status["redis"] = "connected"
     if is_postgres_enabled():
         from app.core.database import get_pool
-        pool = get_pool()
+
+        pool = await get_pool()
         try:
             async with pool.acquire() as conn:
                 await conn.execute("SELECT 1")
