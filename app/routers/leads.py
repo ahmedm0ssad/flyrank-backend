@@ -212,19 +212,23 @@ async def export_leads_csv(
             detail="Widget not found",
         )
 
-    csv_content = await lead_service.export_csv(
+    csv_content, truncated = await lead_service.export_csv(
         widget_id=str(widget_id),
         tenant_id=tenant_id,
         date_from=date_from,
         date_to=date_to,
     )
 
+    headers = {
+        "Content-Disposition": f'attachment; filename="widget_{widget_id}_leads.csv"',
+    }
+    if truncated:
+        headers["X-Export-Truncated"] = "true"
+
     return PlainTextResponse(
         content=csv_content,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="widget_{widget_id}_leads.csv"',
-        },
+        headers=headers,
     )
 
 

@@ -201,13 +201,14 @@ class TestDashboardService:
         request = FakeRequest()
         await lead_service.submit_lead(widget_id, body, request)
 
-        csv_content = await lead_service.export_csv(
+        csv_content, truncated = await lead_service.export_csv(
             widget_id=widget_id,
             tenant_id=tenant_id,
         )
         assert "John" in csv_content
         assert "john@test.com" in csv_content
         assert csv_content.startswith("id,")
+        assert not truncated
 
     @pytest.mark.asyncio
     async def test_export_csv_with_date_filter(self, created_widget):
@@ -221,12 +222,13 @@ class TestDashboardService:
         request = FakeRequest()
         await lead_service.submit_lead(widget_id, body, request)
 
-        csv_content = await lead_service.export_csv(
+        csv_content, truncated = await lead_service.export_csv(
             widget_id=widget_id,
             tenant_id=tenant_id,
             date_from=date(2099, 1, 1),
         )
         assert len(csv_content.splitlines()) == 1
+        assert not truncated
 
     @pytest.mark.asyncio
     async def test_delete_lead(self, created_widget):

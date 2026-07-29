@@ -206,8 +206,8 @@ async def submit_lead(
 
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, create_enrichment_job, str(lead.id))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to enqueue enrichment job for lead %s: %s", lead.id, exc)
 
     if honeypot_triggered:
         _audit_log(
@@ -372,7 +372,7 @@ async def export_csv(
     tenant_id: str,
     date_from: date | None = None,
     date_to: date | None = None,
-) -> str:
+) -> tuple[str, bool]:
     repo = _get_or_create_repo()
     leads = await repo.get_export_data(
         widget_id=widget_id,
@@ -380,6 +380,7 @@ async def export_csv(
         date_from=date_from,
         date_to=date_to,
     )
+    truncated = len(leads) > MAX_EXPORT_ROWS
     leads = leads[:MAX_EXPORT_ROWS]
 
     output = io.StringIO()
@@ -425,7 +426,7 @@ async def export_csv(
             row.append(val)
         writer.writerow(row)
 
-    return output.getvalue()
+    return output.getvalue(), truncated
 
 
 async def delete_lead(lead_id: str, widget_id: str, tenant_id: str) -> bool:
