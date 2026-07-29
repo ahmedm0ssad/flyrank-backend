@@ -7,17 +7,17 @@
 
 ## 1. Executive Summary
 
-The FlyRank Backend AI codebase has undergone an 8-milestone production readiness review spanning architecture, security, performance, testing, documentation, and two fix passes (Tier A, Tier B). The current state is **functional for SQLite deployments** but **has a critical Postgres integration bug** (Tier B, M8 finding #28) that breaks the public widget config/submit pipeline and widget update path when running against PostgreSQL.
+The FlyRank Backend AI codebase has undergone a 9-milestone production readiness review spanning architecture, security, performance, testing, documentation, and three fix passes (Tier A, Tier B). Both critical Postgres bugs identified in M8 (#27 and #28) are now fixed and live-verified (see M9 commits below). The current state is **fully functional on both SQLite and PostgreSQL**.
 
-**Test suite:** 618 passed, 0 failed, 0 skipped (up from 603/605 in M4 baseline — improvement due to Postgres now being reachable, not code fixes). Overall coverage: 82%. Lead-capture modules: 83–100%.
+**Test suite:** 619 passed, 0 failed, 0 skipped (up from 618). Overall coverage: 82%. Lead-capture modules: 83–100%. **`dependencies/leads.py` recovered from 83% to 96%** with M9 test additions.
 
 **Security:** Strong. Origin validation is correct (no substring bug), tenant isolation thorough, auth enforced on all dashboard routes, secrets hygiene clean. Missing defense-in-depth headers (Tier C).
 
-**Critical issues blocking production deployment:**
-1. `postgres_widget_repo.get_by_id_raw()` returns `config` as a JSON string instead of a parsed dict — breaks `embed_service`, `submit_lead`, `update_widget` on the Postgres code path (Tier B, **M8 finding, confirmed live: 500 on all 3 endpoints**).
-2. `/health` endpoint's `get_pool()` call at `main.py:121` is a coroutine called without `await`, causing the health check to always report Postgres as unavailable (Tier B, **M8 finding, confirmed live: returns `"postgres":"unavailable"` while Postgres container sits healthy**).
+**All prior critical issues resolved in M9:**
+1. **#28 fixed:** `get_by_id_raw()` now normalizes `config` with `json.loads()` — same pattern `_row_to_response` already uses. PUT-path `ValueError` at line 141 also fixed (same root cause). Live-verified: config returns as dict on Postgres, PUT succeeds without ValueError, submit returns 201.
+2. **#27 fixed:** `pool = await get_pool()` at `main.py:121`. Live-verified: `/health` now returns `"postgres":"connected"`.
 
-**Tier C items pending Ahmed's sign-off:** 29 items across architecture, security, performance, validation, M8 findings (#27–#29), and documentation (see §6; 1 duplicate removed in M8.1).
+**Tier C items pending Ahmed's sign-off:** 28 items across architecture, security, performance, validation, M8 finding (#29), and documentation (see §6; 1 duplicate removed in M8.1).
 
 ---
 
@@ -98,6 +98,24 @@ Commit `2715feb` was primarily a formatting/cleanup pass (Tier A) but included t
 
 These were delivered alongside Tier A formatting fixes in the same commit. They are listed here for completeness rather than in §4.
 
+### M9 Tier B Fixes
+
+| # | Finding (from M8 §6) | Fix | Commit |
+|---|----------------------|-----|--------|
+| 1 | **#27** — `app/main.py:121`: `/health` calls `get_pool()` without `await`. Coroutine-await bug: returns coroutine object → `pool.acquire()` fails → always reports `"postgres":"unavailable"`. | `pool = await get_pool()` | `1739d8d` |
+| 2 | **#28** — `app/repositories/postgres_widget_repo.py:67-79`: `get_by_id_raw()` returns `dict(row)` where asyncpg returns JSONB as a string. Downstream code expects `config` to be a dict, causing `AttributeError` on `POST /public/widget/{id}/submit`, `GET /public/widget/{id}/config`, `PUT /widgets/{id}`. Same root cause at line 141: `dict(existing["config"])` raises `ValueError` because config is a string. | `json.loads()` normalization in both `get_by_id_raw()` (line 79) and the PUT merge path (line 141), matching `_row_to_response` pattern | `e1131f7` |
+| 3 | **§11.4 black drift** — `app/main.py` (missing blank line after import), `app/services/lead_service.py` (long logger line) | `python -m black .` | `aa6a45c` (lead_service.py); main.py included in `1739d8d` |
+| 4 | **§13 P2 #10** — `dependencies/leads.py:77-84` had zero coverage because `_FakePipeline` lacked `expire()` method, causing every test to fall through to `except Exception`. | Added `expire()` to `_FakePipeline` + new test `test_redis_pipeline_widget_ip_triggers_limit`. Lines 77-84 now exercised by 9 tests. | `7cb5f1f` |
+
+**Live re-verification (Postgres mode, port 8002):**
+- `GET /health` → `{"status":"ok","redis":"connected","postgres":"connected"}` (previously "unavailable")
+- `GET /public/widget/{id}/config` → 200, config returned as `dict` (previously 500)
+- `POST /public/widget/{id}/submit` → 201, lead created (previously 500)
+- `PUT /widgets/{id}` → 200, `js_version` incremented (previously `ValueError`)
+- `POST /public/widget/{id}/submit` with `Origin: https://domain.evil.com` → **403 "Origin not allowed"** — first-ever successful verification of origin bypass on Postgres (previously blocked by #28 500)
+
+**Full CI test suite:** `619 passed`, 0 failed, 0 skipped.
+
 ---
 
 ## 6. Tier C — Flagged, NOT Applied, Needs Ahmed's Approval
@@ -159,8 +177,8 @@ All items listed as they currently stand in `docs/reviews/*.md` after remediatio
 
 | # | File:Line | Description | Tier | Reasoning |
 |---|-----------|-------------|------|-----------|
-| 27 | `app/main.py:121` | `/health` endpoint calls `get_pool()` without `await`. `get_pool()` is a coroutine; this returns a coroutine object, not a pool. `pool.acquire()` fails with AttributeError, caught by `except Exception:` → always reports `postgres: "unavailable"`. | **B** | **Confirmed live (M8.1):** `curl http://127.0.0.1:8000/health` returns `{"status":"degraded","redis":"connected","postgres":"unavailable"}` while `docker compose ps` shows Postgres container healthy. Fix: `pool = await get_pool()` at line 121. Production-halting for health monitoring. |
-| 28 | `app/repositories/postgres_widget_repo.py:67-79` | `get_by_id_raw()` returns `dict(row)` where `config` column is a JSON string (asyncpg returns JSONB as string by default). Downstream code (`embed_service.get_raw_widget` → `lead_service.submit_lead`) expects `config` to be a dict. Causes `AttributeError: 'str' object has no attribute 'get'` on `POST /public/widget/{id}/submit`, `GET /public/widget/{id}/config`, `PUT /widgets/{id}` when running against Postgres. | **B** | **Confirmed live (M8.1):** All three endpoints return 500 with the AttributeError. Docker logs show: `File ".../embed_service.py", line 41: "brand_color": config.get("brand_color", "#2563eb")` → `AttributeError: 'str' object has no attribute 'get'`. PUT additionally shows `ValueError: dictionary update sequence element` in `postgres_widget_repo.py:141`. **All public widget endpoints block on Postgres. Origin-validation bypass test also blocked** — the config-bug 500 fires before the origin check is reached. Fix: normalize `config` with `json.loads()` in `get_by_id_raw` (same as `_row_to_response` already does at line 17-21). |
+| 27 | `app/main.py:121` | `/health` endpoint calls `get_pool()` without `await`. `get_pool()` is a coroutine; this returns a coroutine object, not a pool. `pool.acquire()` fails with AttributeError, caught by `except Exception:` → always reports `postgres: "unavailable"`. | **B** | **Fixed in M9** (`1739d8d`) — `pool = await get_pool()`. Moved to §5. |
+| 28 | `app/repositories/postgres_widget_repo.py:67-79` | `get_by_id_raw()` returns `dict(row)` where `config` column is a JSON string (asyncpg returns JSONB as string by default). Downstream code (`embed_service.get_raw_widget` → `lead_service.submit_lead`) expects `config` to be a dict. | **B** | **Fixed in M9** (`e1131f7`) — `json.loads()` normalization in `get_by_id_raw` and PUT merge path (line 141). Moved to §5. |
 | 29 | `app/main.py:103-104` | `deprecated = _check_deprecated()` imported/utilization pattern | **A** | isort skips 1 file; black reformats 2 files (minor). |
 
 ---
@@ -232,7 +250,6 @@ In M6, a test was attempted for `_call_with_timeout` when the coroutine raises a
 |---|---------|------|--------|
 | 1 | `batch_delete` calls `self.delete()` per lead in a loop (in-memory only) | C | Awaiting Postgres LeadRepository |
 | 2 | No Postgres-backed `LeadRepository` exists | C | Cannot verify index usage / query plans for leads on real Postgres |
-| 3 | Two black formatting drift issues found in M8 | A | `app/main.py` (1 blank line after import), `app/services/lead_service.py` (long log line) |
 
 **All M3 performance checks complete:** 12/12 indexes present ✓, all 5 caches correct ✓, EXPIRE pipelined ✓, blocking call fixed ✓, background job lifecycle matches spec ✓, geo chain correct ✓.
 
@@ -248,7 +265,7 @@ In M6, a test was attempted for `_call_with_timeout` when the coroutine raises a
 | **Single Responsibility** | `lead_service.py` at 469 lines covers submission pipeline, caching, stats, export, deletion, audit log | Medium (split into focused services) |
 | **Naming** | Routers lack `_router.py` suffix, workers in `services/` not `workers/`, 3 files missing `_service.py` suffix | Cosmetic (rename risk: import chains) |
 | **Race Condition** | Re-enrich race — no `lead_id → job_id` mapping in Redis | Small design discussion needed |
-| **Config Typing** | `postgres_widget_repo.get_by_id_raw` returns `dict` with string-valued config — downstream code must know to `json.loads()` | Small (normalize in the method) |
+| **Config Typing** | ~~`postgres_widget_repo.get_by_id_raw` returns `dict` with string-valued config — downstream code must know to `json.loads()`~~ | **Fixed in M9** (`e1131f7`) |
 | **Scrapers** | 4 scraper modules at 0–65% coverage. Not in scope for this review. | Low (feature is isolated) |
 
 ---
@@ -366,17 +383,17 @@ All documentation gaps are Tier C (requires sign-off).
 
 ### P0 — Critical (blocking production deployment)
 
-| # | Action | Reason |
-|---|--------|--------|
-| 1 | **Fix `postgres_widget_repo.get_by_id_raw()`** — normalize `config` with `json.loads()` at `repositories/postgres_widget_repo.py:79` | **All public widget endpoints break on Postgres.** `_row_to_response` already handles this correctly (line 17-21). The fix is to apply the same normalization in `get_by_id_raw`. |
-| 2 | **Fix `/health` endpoint** — change `pool = get_pool()` → `pool = await get_pool()` at `main.py:121` | Health check always reports Postgres unavailable. Coroutine-await bug. 2-line fix. |
+| # | Action | Reason | Status |
+|---|--------|--------|--------|
+| 1 | **Fix `postgres_widget_repo.get_by_id_raw()`** — normalize `config` with `json.loads()` at `repositories/postgres_widget_repo.py:79` | **All public widget endpoints break on Postgres.** `_row_to_response` already handles this correctly (line 17-21). The fix is to apply the same normalization in `get_by_id_raw`. | **Done** (`e1131f7`) — also fixed PUT ValueError at line 141 |
+| 2 | **Fix `/health` endpoint** — change `pool = get_pool()` → `pool = await get_pool()` at `main.py:121` | Health check always reports Postgres unavailable. Coroutine-await bug. 2-line fix. | **Done** (`1739d8d`) |
 
 ### P1 — High
 
-| # | Action | Reason |
-|---|--------|--------|
-| 3 | Run `python -m black .` to fix 2 formatting drift files | Keeps CI green. Current `black --check` would fail in CI pipeline. |
-| 4 | Audit Tier C items and sign off on each | 29 items awaiting decision (1 duplicate removed M8.1). Some are clearly intentional (#5-9), some need discussion (#26 status codes, #14 tenant sourcing). |
+| # | Action | Reason | Status |
+|---|--------|--------|--------|
+| 3 | Run `python -m black .` to fix 2 formatting drift files | Keeps CI green. Current `black --check` would fail in CI pipeline. | **Done** (`aa6a45c` for lead_service.py, `1739d8d` for main.py) |
+| 4 | Audit Tier C items and sign off on each | 28 items awaiting decision (1 duplicate removed M8.1). Some are clearly intentional (#5-9), some need discussion (#26 status codes, #14 tenant sourcing). | |
 | 5 | Add `services.postgres` to `.github/workflows/ci.yml` | The 2 `test_db_schema.py` tests will fail in CI without a Postgres service container. Currently they pass only when Docker Postgres happens to be running. |
 
 ### P2 — Medium
@@ -387,7 +404,7 @@ All documentation gaps are Tier C (requires sign-off).
 | 7 | Update README to cover widget/lead/embed endpoints | Single biggest documentation gap — covers 0 of 15+ new routes. |
 | 8 | Fix Docker Redis port in README (6380, not 6379) | Prevents setup frustration. |
 | 9 | Add OpenAPI descriptions to all new routes | Improves developer experience in `/docs`. |
-| 10 | **Write test for `dependencies/leads.py:77-84`** — rate-limiter fail-over-to-in-process path introduced by EXPIRE pipelining fix | Coverage dropped from 96% → 83%. The fail-over code (when Redis EXPIRE or pipeline errors occur) has zero test coverage. This is a cold path but a production-relevant one during Redis degradation. |
+| 10 | **Write test for `dependencies/leads.py:77-84`** — rate-limiter fail-over-to-in-process path introduced by EXPIRE pipelining fix | Coverage dropped from 96% → 83%. The fail-over code (when Redis EXPIRE or pipeline errors occur) has zero test coverage. This is a cold path but a production-relevant one during Redis degradation. | **Done** (`7cb5f1f`) — added `expire()` to `_FakePipeline` + new test. Coverage recovered to 96%. |
 
 ### P3 — Low
 
@@ -400,4 +417,4 @@ All documentation gaps are Tier C (requires sign-off).
 
 ---
 
-*End of Production Readiness Report. 618 tests passing (M8.2 live-verified against SQLite: honeypot ✓, rate-limit ✓, fingerprint dedup ✓, origin-validation ✓, dashboard auth ✓, dashboard stats/list/export ✓, enrichment lifecycle ✓ — see M8.2 commit message for full request/response pairs; M8.1 confirmed #27 health-check await bug and #28 Postgres config-bug return 500 on 3 endpoints), 29 Tier C items awaiting sign-off (1 duplicate removed M8.1), 2 critical Postgres bugs identified during final verification (§6 #27–#28).*
+*End of Production Readiness Report. 619 tests passing (M9 live-verified on Postgres: /health returns "connected" ✓, config returns as dict ✓, submit returns 201 ✓, PUT succeeds ✓, origin-bypass returns 403 ✓ — first-ever successful origin-verification on Postgres, previously blocked by #28 500). 28 Tier C items awaiting sign-off (1 duplicate removed M8.1). Both critical Postgres bugs (#27, #28) fixed in M9 (see §5).*
