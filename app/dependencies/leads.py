@@ -73,11 +73,9 @@ async def check_rate_limits(ip: str, widget_id: str) -> int | None:
         pipe = redis.pipeline()
         for key, _ in keys_and_limits:
             pipe.incr(key)
-        counts = await pipe.execute()
-
-        for (key, _), count in zip(keys_and_limits, counts):
-            if count == 1:
-                await redis.expire(key, RATE_LIMIT_WINDOW)
+            pipe.expire(key, RATE_LIMIT_WINDOW)
+        results = await pipe.execute()
+        counts = [results[i] for i in range(0, len(results), 2)]
 
         for (key, limit), count in zip(keys_and_limits, counts):
             if count > limit:
