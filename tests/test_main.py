@@ -4,15 +4,38 @@ from fastapi.testclient import TestClient
 
 
 class TestHomeEndpoint:
-    def test_home_not_found(self, client: TestClient):
+    def test_home_returns_info(self, client: TestClient):
         response = client.get("/")
-        assert response.status_code == 404
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "FlyRank API"
+        assert data["version"] == "0.3.0"
+
+    def test_home_with_redis_connected(self, client: TestClient, monkeypatch):
+        fake_redis = object()
+        monkeypatch.setattr("app.main.get_redis", lambda: fake_redis)
+
+        response = client.get("/")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["redis"] == "connected"
 
 
 class TestHealthEndpoint:
-    def test_health_not_found(self, client: TestClient):
+    def test_health_returns_ok(self, client: TestClient):
         response = client.get("/health")
-        assert response.status_code == 404
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+
+    def test_health_with_redis_connected(self, client: TestClient, monkeypatch):
+        fake_redis = object()
+        monkeypatch.setattr("app.main.get_redis", lambda: fake_redis)
+
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["redis"] == "connected"
 
 
 class TestValidationErrorHandler:

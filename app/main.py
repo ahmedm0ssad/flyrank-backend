@@ -99,6 +99,38 @@ app.include_router(leads_dashboard_router)
 app.include_router(leads_cross_router)
 
 
+@app.get("/")
+async def home():
+    info = {
+        "name": "FlyRank API",
+        "version": "0.3.0",
+        "endpoints": ["/tasks", "/scrape", "/ai", "/widgets", "/leads"],
+    }
+    if get_redis():
+        info["redis"] = "connected"
+    return info
+
+
+@app.get("/health")
+async def health():
+    status = {"status": "ok"}
+    if get_redis():
+        status["redis"] = "connected"
+    if is_postgres_enabled():
+        from app.core.database import get_pool
+        pool = get_pool()
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute("SELECT 1")
+            status["postgres"] = "connected"
+        except Exception:
+            status["postgres"] = "unavailable"
+            status["status"] = "degraded"
+    else:
+        status["database"] = "sqlite"
+    return status
+
+
 @app.get("/public/info")
 async def public_info():
     return {"message": "Welcome stranger! This info is public."}
