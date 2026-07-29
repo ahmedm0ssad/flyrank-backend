@@ -76,7 +76,10 @@ class PostgresWidgetRepository:
             )
         if row is None:
             return None
-        return dict(row)
+        result = dict(row)
+        if isinstance(result.get("config"), str):
+            result["config"] = json.loads(result["config"])
+        return result
 
     async def list_by_tenant(
         self,
@@ -138,7 +141,10 @@ class PostgresWidgetRepository:
             if existing is None:
                 return None
 
-            merged_config = dict(existing["config"])
+            raw_config = existing["config"]
+            if isinstance(raw_config, str):
+                raw_config = json.loads(raw_config)
+            merged_config = dict(raw_config)
             if config is not None:
                 merged_config.update(config)
 
