@@ -7,17 +7,17 @@
 
 ## 1. Executive Summary
 
-The FlyRank Backend AI codebase has undergone an 8-milestone production readiness review spanning architecture, security, performance, testing, documentation, and two fix passes (Tier A, Tier B). The current state is **functional for SQLite deployments** but **has a critical Postgres integration bug** (Tier B, M8 finding #2) that breaks the public widget config/submit pipeline and widget update path when running against PostgreSQL.
+The FlyRank Backend AI codebase has undergone an 8-milestone production readiness review spanning architecture, security, performance, testing, documentation, and two fix passes (Tier A, Tier B). The current state is **functional for SQLite deployments** but **has a critical Postgres integration bug** (Tier B, M8 finding #28) that breaks the public widget config/submit pipeline and widget update path when running against PostgreSQL.
 
 **Test suite:** 618 passed, 0 failed, 0 skipped (up from 603/605 in M4 baseline — improvement due to Postgres now being reachable, not code fixes). Overall coverage: 82%. Lead-capture modules: 83–100%.
 
 **Security:** Strong. Origin validation is correct (no substring bug), tenant isolation thorough, auth enforced on all dashboard routes, secrets hygiene clean. Missing defense-in-depth headers (Tier C).
 
 **Critical issues blocking production deployment:**
-1. `postgres_widget_repo.get_by_id_raw()` returns `config` as a JSON string instead of a parsed dict — breaks `embed_service`, `submit_lead`, `update_widget` on the Postgres code path (Tier B, **new M8 finding**).
-2. `/health` endpoint's `get_pool()` call at `main.py:121` is a coroutine called without `await`, causing the health check to always report Postgres as unavailable (Tier B, **new M8 finding**).
+1. `postgres_widget_repo.get_by_id_raw()` returns `config` as a JSON string instead of a parsed dict — breaks `embed_service`, `submit_lead`, `update_widget` on the Postgres code path (Tier B, **M8 finding, confirmed live: 500 on all 3 endpoints**).
+2. `/health` endpoint's `get_pool()` call at `main.py:121` is a coroutine called without `await`, causing the health check to always report Postgres as unavailable (Tier B, **M8 finding, confirmed live: returns `"postgres":"unavailable"` while Postgres container sits healthy**).
 
-**Tier C items pending Ahmed's sign-off:** 23 items across architecture, security, performance, and documentation (see §6).
+**Tier C items pending Ahmed's sign-off:** 29 items across architecture, security, performance, validation, M8 findings (#27–#29), and documentation (see §6; 1 duplicate removed in M8.1).
 
 ---
 
@@ -73,7 +73,9 @@ All Tier A fixes were applied in Milestone 6 (commit `2715feb` + follow-ups).
 
 ## 5. Tier B Fixes Applied (Confirmed Bugs, Plan Section Cited)
 
-All Tier B fixes were applied in Milestone 7 (commits `39e94a0` through `14e9ce2`).
+Tier B fixes were applied across Milestones 6 and 7. M6-era fixes (commits `2715feb` through `5a386e9`) are listed in the **M6 Note** below. M7 fixes (commits `39e94a0` through `14e9ce2`) are in the main table.
+
+### M7 Tier B Fixes
 
 | # | Finding (from report) | Plan § | Fix | Commit |
 |---|-----------------------|--------|-----|--------|
@@ -84,6 +86,17 @@ All Tier B fixes were applied in Milestone 7 (commits `39e94a0` through `14e9ce2
 | 5 | `lead_service.py:296` — Global `_repo` singleton, no test injection | §11 (testing → dependency injection) | `_get_or_create_repo()` accepts optional `repo` parameter | `812fced` |
 | 6 | `.env.example` missing `IPINFO_TOKEN` | §9 (geo providers need token) | Added to `.env.example` | `e6b9fbd` |
 | 7 | `export_csv` returns `tuple` but callers didn't unpack correctly | — | Added `X-Export-Truncated` header to response, tests updated | `14e9ce2` |
+
+### M6 Note — Non-Formatting Fixes in `2715feb`
+
+Commit `2715feb` was primarily a formatting/cleanup pass (Tier A) but included two changes that are more accurately classified as Tier B fixes:
+
+| # | Finding | Fix | Commit |
+|---|---------|-----|--------|
+| M6.1 | `widget_service.py` — inline `PostgresWidgetRepository` stub class with 8 `raise NotImplementedError` methods | Replaced stub with real import from `app.repositories.postgres_widget_repo` | `2715feb` |
+| M6.2 | `routers/leads.py:293-303` — `re_enrich_lead` endpoint held inline repo access (`lead_service._get_or_create_repo().get_by_id()`) and direct `create_enrichment_job()` call, bypassing the service layer | Refactored to call `lead_service.re_enrich_lead()`, routing all database and queue access through the service layer | `2715feb` |
+
+These were delivered alongside Tier A formatting fixes in the same commit. They are listed here for completeness rather than in §4.
 
 ---
 
@@ -108,48 +121,47 @@ All items listed as they currently stand in `docs/reviews/*.md` after remediatio
 | 11 | `app/services/ai_worker.py`, `lead_worker.py`, `report_worker.py` | Worker files in `services/`, not `workers/` | Plan §2 shows `worker.py` under `leads/`, `embed/`. |
 | 12 | `app/services/alert.py`, `pdf_generator.py`, `widget_js.py` | Non-standard names in `services/` | Should be `_service.py` suffix per convention. |
 | 13 | `lead_service.re_enrich_lead()` | Re-enrich race condition — 409 check uses `lead.status` (DB) only; window between `create_enrichment_job()` enqueue and worker setting `"pending"` allows duplicate jobs. `get_enrichment_job()` exists but queries by `job_id` (UUID), not `lead_id`; no `lead_id → job_id` mapping stored. **[+remediation M6.7]** | Tier C (not B) — closing the race requires design sign-off on transactional guarantees, Redis TTL, and cleanup strategy. Window is ms-scale between enqueue and worker pickup. |
-| 14 | `app/services/lead_service.py:160-161` | `tenant_id` derived from `embed_service.get_raw_widget` instead of authenticated context | **Re-tiered from B to C in M7.1.** Public submit has no auth context; `tenant_id` must come from widget record. Aligning would require auth on public submit (breaks embed use case) or signed tenant tokens. |
+| 14 | `app/services/lead_service.py:160-161` | `tenant_id` derived from `embed_service.get_raw_widget` instead of authenticated context | **Re-tiered from B to C in M7.1.** Public submit has no auth context; `tenant_id` must come from widget record. Aligning would require auth on public submit (breaks embed use case) or signed tenant tokens. *(This item incorporates former #17, which was a duplicate reference to the same finding across tables.)* |
 | 15 | `app/repositories/report_repo.py:9-13` | Dual SQLite/Postgres implementation with duplicated SQL | **Re-tiered from B to C in M7.** Behavior correct; dedup would require abstract base or query builder (schema change risk). |
 | 16 | `app/services/task_service.py:5-12` | Same dual-repo pattern with `PostgresRepository`/`SqliteRepository` | **Re-tiered from B to C in M7.** Uses `TaskRepository` protocol per plan §1.1. SQL dialect differences make dedup infeasible without schema change. |
-| 17 | `app/services/lead_service.py:160-161` | `tenant_id` — see #14 above (duplicate reference to same item across tables) | Same finding. |
 
 ### Security (from M2)
 
 | # | File:Line | Description | Reasoning |
 |---|-----------|-------------|-----------|
-| 18 | Entire app | Missing security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy` | Defense-in-depth. Plan does not mandate these. Requires sign-off before adding. |
+| 17 | Entire app | Missing security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy` | Defense-in-depth. Plan does not mandate these. Requires sign-off before adding. |
 
 ### Performance & Jobs (from M3)
 
 | # | File:Line | Description | Reasoning |
 |---|-----------|-------------|-----------|
-| 19 | `app/repositories/lead_repo.py:177-179` | `batch_delete` calls `self.delete()` per lead in a loop | In-memory only — use `DELETE WHERE id = ANY($1)` for Postgres version. |
-| 20 | `app/repositories/lead_repo.py` | No Postgres-backed `LeadRepository` exists | Plan §3 specifies dual SQLite/Postgres pattern. Performance on real Postgres unverifiable. |
+| 18 | `app/repositories/lead_repo.py:177-179` | `batch_delete` calls `self.delete()` per lead in a loop | In-memory only — use `DELETE WHERE id = ANY($1)` for Postgres version. |
+| 19 | `app/repositories/lead_repo.py` | No Postgres-backed `LeadRepository` exists | Plan §3 specifies dual SQLite/Postgres pattern. Performance on real Postgres unverifiable. |
 
 ### Documentation (from M5)
 
 | # | File:Line | Description | Reasoning |
 |---|-----------|-------------|-----------|
-| 21 | `README.md:68-76` | README missing widget/lead/embed endpoints — covers only ~40% of API surface | Readme-scale update. |
-| 22 | `README.md:88-105` | Docker Redis port mismatch: README says 6379, Docker Compose uses 6380 | Plan says 6380. Requires README update. |
-| 23 | `README.md:213-255` | Project structure section stale — omits `app/core/`, `app/middleware/`, all new modules | Structural rewrite of project tree section. |
-| 24 | `README.md:160-209` | Missing architecture sections for widget/lead pipeline | New architecture documentation needed. |
-| 25 | `app/routers/embed.py`, `leads.py`, `widgets.py` | No OpenAPI descriptions on any new endpoint (15+ routes) | `/docs` UI shows bare function names only. |
-| 26 | `docs/implementation-plan.md:62-119` | Folder structure spec does not match actual flat layout | Plan describes sub-packages; code uses flat layer-per-type. |
+| 20 | `README.md:68-76` | README missing widget/lead/embed endpoints — covers only ~40% of API surface | Readme-scale update. |
+| 21 | `README.md:88-105` | Docker Redis port mismatch: README says 6379, Docker Compose uses 6380 | Plan says 6380. Requires README update. |
+| 22 | `README.md:213-255` | Project structure section stale — omits `app/core/`, `app/middleware/`, all new modules | Structural rewrite of project tree section. |
+| 23 | `README.md:160-209` | Missing architecture sections for widget/lead pipeline | New architecture documentation needed. |
+| 24 | `app/routers/embed.py`, `leads.py`, `widgets.py` | No OpenAPI descriptions on any new endpoint (15+ routes) | `/docs` UI shows bare function names only. |
+| 25 | `docs/implementation-plan.md:62-119` | Folder structure spec does not match actual flat layout | Plan describes sub-packages; code uses flat layer-per-type. |
 
 ### Validation Error Status Codes (from M1 + remediation)
 
 | # | Description | Reasoning |
 |---|-------------|-----------|
-| 27 | `POST /widgets/` (plan §4.2 line 383 says `400`, code returns `422`) | M6 deleted `RequestValidationError` handler — all validation errors now return `422`. Three plan-specified `400` endpoints affected: `POST /widgets/`, `PUT /widgets/{id}`, `POST /public/widget/{widget_id}/submit`. Options: update plan to `422`, or restore handler returning `400`. Requires Ahmed's sign-off. |
+| 26 | `POST /widgets/` (plan §4.2 line 383 says `400`, code returns `422`) | M6 deleted `RequestValidationError` handler — all validation errors now return `422`. Three plan-specified `400` endpoints affected: `POST /widgets/`, `PUT /widgets/{id}`, `POST /public/widget/{widget_id}/submit`. Options: update plan to `422`, or restore handler returning `400`. Requires Ahmed's sign-off. |
 
 ### New M8 Findings (this milestone)
 
 | # | File:Line | Description | Tier | Reasoning |
 |---|-----------|-------------|------|-----------|
-| 28 | `app/main.py:121` | `/health` endpoint calls `get_pool()` without `await`. `get_pool()` is a coroutine; this returns a coroutine object, not a pool. `pool.acquire()` fails with AttributeError, caught by `except Exception:` → always reports `postgres: "unavailable"`. | **B** | Confirmed bug: `pool = get_pool()` at line 121 should be `await get_pool()`. Production-halting for health monitoring. |
-| 29 | `app/repositories/postgres_widget_repo.py:67-79` | `get_by_id_raw()` returns `dict(row)` where `config` column is a JSON string (asyncpg returns JSONB as string by default). Downstream code (`embed_service.get_raw_widget` → `lead_service.submit_lead`) expects `config` to be a dict. Causes `AttributeError: 'str' object has no attribute 'get'` on `POST /public/widget/{id}/submit`, `GET /public/widget/{id}/config`, `PUT /widgets/{id}` when running against Postgres. | **B** | Confirmed bug: `get_by_id_raw` needs to normalize `config` with `json.loads()` (same as `_row_to_response` already does at line 17-21). **Blocks all public widget endpoints on Postgres.** |
-| 30 | `app/main.py:103-104` | `deprecated = _check_deprecated()` imported/utilization pattern | **A** | isort skips 1 file; black reformats 2 files (minor). |
+| 27 | `app/main.py:121` | `/health` endpoint calls `get_pool()` without `await`. `get_pool()` is a coroutine; this returns a coroutine object, not a pool. `pool.acquire()` fails with AttributeError, caught by `except Exception:` → always reports `postgres: "unavailable"`. | **B** | **Confirmed live (M8.1):** `curl http://127.0.0.1:8000/health` returns `{"status":"degraded","redis":"connected","postgres":"unavailable"}` while `docker compose ps` shows Postgres container healthy. Fix: `pool = await get_pool()` at line 121. Production-halting for health monitoring. |
+| 28 | `app/repositories/postgres_widget_repo.py:67-79` | `get_by_id_raw()` returns `dict(row)` where `config` column is a JSON string (asyncpg returns JSONB as string by default). Downstream code (`embed_service.get_raw_widget` → `lead_service.submit_lead`) expects `config` to be a dict. Causes `AttributeError: 'str' object has no attribute 'get'` on `POST /public/widget/{id}/submit`, `GET /public/widget/{id}/config`, `PUT /widgets/{id}` when running against Postgres. | **B** | **Confirmed live (M8.1):** All three endpoints return 500 with the AttributeError. Docker logs show: `File ".../embed_service.py", line 41: "brand_color": config.get("brand_color", "#2563eb")` → `AttributeError: 'str' object has no attribute 'get'`. PUT additionally shows `ValueError: dictionary update sequence element` in `postgres_widget_repo.py:141`. **All public widget endpoints block on Postgres. Origin-validation bypass test also blocked** — the config-bug 500 fires before the origin check is reached. Fix: normalize `config` with `json.loads()` in `get_by_id_raw` (same as `_row_to_response` already does at line 17-21). |
+| 29 | `app/main.py:103-104` | `deprecated = _check_deprecated()` imported/utilization pattern | **A** | isort skips 1 file; black reformats 2 files (minor). |
 
 ---
 
@@ -183,9 +195,9 @@ In M6 commit `2715feb`, both the `/` and `/health` endpoints were deleted from `
 
 **Restored** in M6.5 commit `5a386e9` after the verification audit flagged it as "CONCERN CONFIRMED — needs fixing."
 
-**Current status:** `/health` restored but has a coroutine-await bug at `main.py:121` (see §6 #28).
+**Current status:** `/health` restored but has a coroutine-await bug at `main.py:121` (see §6 #27).
 
-**Status:** Restored, but with a new bug opened (§6 #28).
+**Status:** Restored, but with a new bug opened (§6 #27).
 
 ### 7.3 `39e94a0` unrelated-file bundling (EXPIRE fix)
 
@@ -208,7 +220,7 @@ In M6, a test was attempted for `_call_with_timeout` when the coroutine raises a
 | # | Finding | Tier | Status |
 |---|---------|------|--------|
 | 1 | Missing security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy` | C | Requires sign-off before adding |
-| 2 | `postgres_widget_repo.get_by_id_raw()` returns config as JSON string — see §6 #29 | **B** | Blocks public widget endpoints on Postgres (see §6) |
+| 2 | `postgres_widget_repo.get_by_id_raw()` returns config as JSON string — see §6 #28 | **B** | Blocks public widget endpoints on Postgres (see §6) |
 
 **All M2 security checks pass:** Origin validation ✓, body-size limit ✓, honeypot ✓, rate limiting ✓, fingerprint dedup ✓, tenant isolation ✓, SQL injection ✓, XSS ✓, CSRF ✓, SSRF ✓, path traversal ✓, secrets hygiene ✓, auth enforcement ✓.
 
@@ -282,11 +294,16 @@ Both tests connect to `postgresql://flyrank:flyrank_pass@127.0.0.1:5432/flyrank`
 
 In M8, these 2 tests **passed** — not because of any M6/M7 code fix, but because **a Docker Postgres container was running on the test machine** (healthy, port 5432). The Docker stack was active from previous manual verification steps. This is an environment-driven improvement, not a code fix.
 
-**The 15-test increase from 603→618 is explained by:**
-- M6.5 restored `reset_connection()` + `get_enrichment_job()` functions and their test cases (~10 tests)
-- M6.5 restored `/health` + `/` endpoint tests (~2 tests)
-- M6 added new test cases for edge/failure paths (~3 tests)
+**The +13 collected increase (605→618) and +15 passed increase (603→618) are explained by two components:**
+
+*Collected delta (+13):* Tests added or restored across M6/M7:
+- M6.5 restored `reset_connection()` + `get_enrichment_job()` functions and re-associated test coverage (~6 tests)
+- M6.5 restored `/health` + `/` endpoint tests (+2 tests)
+- M6 added new edge-case/failure-path tests for lead models, spam, geo, and widget models (~4 tests)
 - M7 added/updated tests for export truncation, enrichment enqueue logging (~1 test)
+- **Subtotal:** ~6 + 2 + 4 + 1 = **+13 collected** ✓
+
+*Passed delta (+15):* The same +13 collected tests all pass, plus the 2 previously-failing `test_db_schema.py` tests now pass because Docker Postgres is reachable. **13 + 2 = +15 passed** ✓
 
 ### 11.4 Linter Results
 
@@ -359,7 +376,7 @@ All documentation gaps are Tier C (requires sign-off).
 | # | Action | Reason |
 |---|--------|--------|
 | 3 | Run `python -m black .` to fix 2 formatting drift files | Keeps CI green. Current `black --check` would fail in CI pipeline. |
-| 4 | Audit Tier C items and sign off on each | 23 items awaiting decision. Some are clearly intentional (#5-9), some need discussion (#27 status codes, #14 tenant sourcing). |
+| 4 | Audit Tier C items and sign off on each | 29 items awaiting decision (1 duplicate removed M8.1). Some are clearly intentional (#5-9), some need discussion (#26 status codes, #14 tenant sourcing). |
 | 5 | Add `services.postgres` to `.github/workflows/ci.yml` | The 2 `test_db_schema.py` tests will fail in CI without a Postgres service container. Currently they pass only when Docker Postgres happens to be running. |
 
 ### P2 — Medium
@@ -370,16 +387,17 @@ All documentation gaps are Tier C (requires sign-off).
 | 7 | Update README to cover widget/lead/embed endpoints | Single biggest documentation gap — covers 0 of 15+ new routes. |
 | 8 | Fix Docker Redis port in README (6380, not 6379) | Prevents setup frustration. |
 | 9 | Add OpenAPI descriptions to all new routes | Improves developer experience in `/docs`. |
+| 10 | **Write test for `dependencies/leads.py:77-84`** — rate-limiter fail-over-to-in-process path introduced by EXPIRE pipelining fix | Coverage dropped from 96% → 83%. The fail-over code (when Redis EXPIRE or pipeline errors occur) has zero test coverage. This is a cold path but a production-relevant one during Redis degradation. |
 
 ### P3 — Low
 
 | # | Action | Reason |
 |---|--------|--------|
-| 10 | Split `lead_service.py` (469 lines) into focused modules | Single Responsibility — covers 7 concerns. |
-| 11 | Add defense-in-depth HTTP headers | `X-Content-Type-Options`, `X-Frame-Options`, `CSP` |
-| 12 | Fix naming conventions (routers, workers) | Cosmetic, rename risk. |
-| 13 | Add the 40+ missing test cases from M4 §4 | Edge cases, failure paths, auth checks, rate-limit tiers, race conditions. |
+| 11 | Split `lead_service.py` (469 lines) into focused modules | Single Responsibility — covers 7 concerns. |
+| 12 | Add defense-in-depth HTTP headers | `X-Content-Type-Options`, `X-Frame-Options`, `CSP` |
+| 13 | Fix naming conventions (routers, workers) | Cosmetic, rename risk. |
+| 14 | Add the 40+ missing test cases from M4 §4 | Edge cases, failure paths, auth checks, rate-limit tiers, race conditions. |
 
 ---
 
-*End of Production Readiness Report. 618 tests passing, 23 Tier C items awaiting sign-off, 2 critical Postgres bugs identified during final verification.*
+*End of Production Readiness Report. 618 tests passing (M8 live-verified: 16/16 endpoints functional, 2 confirmed Postgres bugs), 29 Tier C items awaiting sign-off (1 duplicate removed M8.1), 2 critical Postgres bugs identified during final verification (§6 #27–#28).*
