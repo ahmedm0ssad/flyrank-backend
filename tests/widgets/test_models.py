@@ -61,6 +61,22 @@ class TestWidgetCreate:
                 config={"fields": []},
             )
 
+    def test_fields_with_empty_string_rejected(self):
+        with pytest.raises(ValidationError):
+            WidgetCreate(
+                name="Test",
+                domain="https://example.com",
+                config={"fields": [""]},
+            )
+
+    def test_fields_exceeds_max_items(self):
+        with pytest.raises(ValidationError):
+            WidgetCreate(
+                name="Test",
+                domain="https://example.com",
+                config={"fields": ["f" + str(i) for i in range(21)]},
+            )
+
 
 class TestWidgetUpdate:
     def test_valid_partial_update(self):

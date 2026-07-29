@@ -64,10 +64,25 @@ class TestLeadResponse:
 class TestBatchDeleteRequest:
     def test_valid_ids(self):
         import uuid
+
         req = BatchDeleteRequest(lead_ids=[uuid.uuid4(), uuid.uuid4()])
         assert len(req.lead_ids) == 2
 
     def test_empty_ids_allowed_by_model(self):
-        import uuid
+
         req = BatchDeleteRequest(lead_ids=[])
         assert len(req.lead_ids) == 0
+
+
+class TestLeadSubmitEdgeCases:
+    def test_referer_exceeds_limit(self):
+        with pytest.raises(ValidationError):
+            LeadSubmit(form_data={"name": "John"}, referer="x" * 501)
+
+    def test_nested_dict_in_form_data_rejected(self):
+        with pytest.raises(ValidationError):
+            LeadSubmit(form_data={"name": {"first": "John"}})
+
+    def test_injection_in_form_data_key(self):
+        body = LeadSubmit(form_data={"<script>alert(1)</script>": "value"})
+        assert "<script>alert(1)</script>" in body.form_data
