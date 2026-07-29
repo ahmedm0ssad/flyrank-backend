@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 
 from app.models.job import JobStatus
@@ -14,8 +16,7 @@ class TestQueueModule:
         conn2 = queue_module.get_connection()
         assert conn1 is conn2
 
-        queue_module._connection = None
-        queue_module._queue = None
+        queue_module.reset_connection()
 
     def test_get_queue_returns_singleton(self, monkeypatch):
         from app.core import queue as queue_module
@@ -27,8 +28,17 @@ class TestQueueModule:
         q2 = queue_module.get_queue()
         assert q1 is q2
 
-        queue_module._connection = None
-        queue_module._queue = None
+        queue_module.reset_connection()
+
+    def test_reset_connection_clears_singletons(self, monkeypatch):
+        from app.core import queue as queue_module
+
+        queue_module._connection = MagicMock()
+        queue_module._queue = MagicMock()
+
+        queue_module.reset_connection()
+        assert queue_module._connection is None
+        assert queue_module._queue is None
 
     def test_create_job_returns_job_id_and_status(self, monkeypatch):
         from app.core import queue as queue_module
@@ -354,6 +364,27 @@ class TestEnrichmentQueue:
         )
         assert _fake_queue.enqueued_jobs[0]["args"] == ("lead-abc",)
 
+    def test_get_enrichment_job_returns_none_for_missing(self, monkeypatch):
+        from app.core import queue as queue_module
+
+        result = queue_module.get_enrichment_job("nonexistent")
+        assert result is None
+
+    def test_get_enrichment_job_returns_job_response(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_redis
+
+        _fake_redis.hset(
+            "enrichment_job:test-1",
+            mapping={"status": "finished", "result": "enriched"},
+        )
+
+        job = queue_module.get_enrichment_job("test-1")
+        assert job is not None
+        assert job.job_id == "test-1"
+        assert job.status == JobStatus.FINISHED
+        assert job.result == "enriched"
+
     def test_update_enrichment_job_changes_status(self, monkeypatch):
         from app.core import queue as queue_module
         from tests.conftest import _fake_redis
@@ -375,7 +406,7 @@ class TestEnrichmentQueue:
         q2 = queue_module.get_enrichment_queue()
         assert q1 is q2
 
-        queue_module._enrichment_queue = None
+        queue_module.reset_connection()
 
     def test_enrichment_retry_config_matches_report_jobs(self, monkeypatch):
         from app.core import queue as queue_module
