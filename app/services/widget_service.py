@@ -1,30 +1,11 @@
 import random
 import string
-from typing import Any
 
 from app.core.database import is_postgres_enabled
 from app.models.widget import WidgetCreate, WidgetResponse, WidgetUpdate
 
 if is_postgres_enabled():
-
-    class PostgresWidgetRepository:
-        async def create(self, name, domain, config, tenant_id):
-            raise NotImplementedError
-
-        async def get_by_id(self, widget_id, tenant_id):
-            raise NotImplementedError
-
-        async def list_by_tenant(self, tenant_id, search, active, page, page_size):
-            raise NotImplementedError
-
-        async def update(self, widget_id, tenant_id, name, domain, config):
-            raise NotImplementedError
-
-        async def soft_delete(self, widget_id, tenant_id):
-            raise NotImplementedError
-
-        async def check_domain_exists(self, domain, tenant_id, exclude_id=None):
-            raise NotImplementedError
+    from app.repositories.postgres_widget_repo import PostgresWidgetRepository
 
     _repo = PostgresWidgetRepository()
 else:
@@ -34,11 +15,6 @@ else:
 
 
 _redis_client = None
-
-
-def _set_redis(client):
-    global _redis_client
-    _redis_client = client
 
 
 async def _invalidate_cache(widget_id: str):

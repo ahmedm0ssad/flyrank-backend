@@ -1,8 +1,8 @@
 import pytest
 
 from app.dependencies.embed import validate_origin
-from app.services.embed_service import generate_snippet, get_widget_config
 from app.models.widget import WidgetCreate
+from app.services.embed_service import get_widget_config
 
 pytestmark = pytest.mark.usefixtures("mock_redis")
 
@@ -30,23 +30,22 @@ async def test_config_missing():
 
 
 @pytest.mark.asyncio
-async def test_snippet_generation_with_version_param():
-    snippet = await generate_snippet("abc-123", 5)
-    assert "abc-123" in snippet
-    assert "v=5" in snippet
-    assert snippet.startswith("<script ")
-
-
-@pytest.mark.asyncio
 async def test_origin_exact_match():
     from app.services import widget_service
 
     data = WidgetCreate(
         name="Test",
         domain="https://myshop.com",
-        config={"brand_color": "#000000", "button_text": "Go", "fields": ["email"], "success_message": "OK"},
+        config={
+            "brand_color": "#000000",
+            "button_text": "Go",
+            "fields": ["email"],
+            "success_message": "OK",
+        },
     )
-    widget = await widget_service.create_widget(data, "22222222-2222-2222-2222-222222222222")
+    widget = await widget_service.create_widget(
+        data, "22222222-2222-2222-2222-222222222222"
+    )
 
     class FakeRequest:
         headers = {"origin": "https://myshop.com"}
@@ -62,9 +61,16 @@ async def test_origin_wildcard_match():
     data = WidgetCreate(
         name="Test",
         domain="https://*.myshop.com",
-        config={"brand_color": "#000000", "button_text": "Go", "fields": ["email"], "success_message": "OK"},
+        config={
+            "brand_color": "#000000",
+            "button_text": "Go",
+            "fields": ["email"],
+            "success_message": "OK",
+        },
     )
-    widget = await widget_service.create_widget(data, "22222222-2222-2222-2222-222222222222")
+    widget = await widget_service.create_widget(
+        data, "22222222-2222-2222-2222-222222222222"
+    )
 
     class FakeRequest1:
         headers = {"origin": "https://foo.myshop.com"}
@@ -89,9 +95,16 @@ async def test_origin_subdomain_suffix_bypass_rejected():
     data = WidgetCreate(
         name="Test",
         domain=allowed,
-        config={"brand_color": "#000000", "button_text": "Go", "fields": ["email"], "success_message": "OK"},
+        config={
+            "brand_color": "#000000",
+            "button_text": "Go",
+            "fields": ["email"],
+            "success_message": "OK",
+        },
     )
-    widget = await widget_service.create_widget(data, "22222222-2222-2222-2222-222222222222")
+    widget = await widget_service.create_widget(
+        data, "22222222-2222-2222-2222-222222222222"
+    )
 
     class FakeRequest:
         headers = {"origin": bypass_attempt}
@@ -110,9 +123,16 @@ async def test_origin_missing_rejected():
     data = WidgetCreate(
         name="Test",
         domain="https://myshop.com",
-        config={"brand_color": "#000000", "button_text": "Go", "fields": ["email"], "success_message": "OK"},
+        config={
+            "brand_color": "#000000",
+            "button_text": "Go",
+            "fields": ["email"],
+            "success_message": "OK",
+        },
     )
-    widget = await widget_service.create_widget(data, "22222222-2222-2222-2222-222222222222")
+    widget = await widget_service.create_widget(
+        data, "22222222-2222-2222-2222-222222222222"
+    )
 
     class FakeRequest:
         headers = {}
@@ -128,9 +148,16 @@ async def test_origin_wildcard_no_match_rejected():
     data = WidgetCreate(
         name="Test",
         domain="https://*.myshop.com",
-        config={"brand_color": "#000000", "button_text": "Go", "fields": ["email"], "success_message": "OK"},
+        config={
+            "brand_color": "#000000",
+            "button_text": "Go",
+            "fields": ["email"],
+            "success_message": "OK",
+        },
     )
-    widget = await widget_service.create_widget(data, "22222222-2222-2222-2222-222222222222")
+    widget = await widget_service.create_widget(
+        data, "22222222-2222-2222-2222-222222222222"
+    )
 
     class FakeRequest:
         headers = {"origin": "https://evil.com"}

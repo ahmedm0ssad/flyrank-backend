@@ -28,6 +28,7 @@ def _mock_auth():
 @pytest.fixture(autouse=True)
 def _reset_widget_repo():
     from app.services.widget_service import _get_repo
+
     repo = _get_repo()
     repo._widgets.clear()
 
@@ -35,6 +36,7 @@ def _reset_widget_repo():
 @pytest.fixture(autouse=True)
 def _reset_lead_repo():
     from app.services.lead_service import _get_or_create_repo
+
     repo = _get_or_create_repo()
     repo._leads.clear()
 
@@ -56,7 +58,9 @@ def widget():
             "success_message": "Thanks!",
         },
     )
-    w = asyncio.run(widget_service.create_widget(data, "11111111-1111-1111-1111-111111111111"))
+    w = asyncio.run(
+        widget_service.create_widget(data, "11111111-1111-1111-1111-111111111111")
+    )
     return w
 
 
@@ -72,7 +76,13 @@ class TestE2EWidget:
 
         submit_resp = client.post(
             f"/public/widget/{widget_id}/submit",
-            json={"form_data": {"name": "John", "email": "john@test.com", "phone": "+1234567890"}},
+            json={
+                "form_data": {
+                    "name": "John",
+                    "email": "john@test.com",
+                    "phone": "+1234567890",
+                }
+            },
             headers={"Origin": "https://myshop.com"},
         )
         assert submit_resp.status_code == 201
@@ -81,6 +91,7 @@ class TestE2EWidget:
         lead_id = submit_data["lead_id"]
 
         from app.services.lead_service import _get_or_create_repo
+
         repo = _get_or_create_repo()
         lead = asyncio.run(repo.get_by_id(lead_id))
         assert lead is not None
@@ -111,6 +122,7 @@ class TestE2EWidget:
         lead_id = submit_data["lead_id"]
 
         from app.services.lead_service import _get_or_create_repo
+
         repo = _get_or_create_repo()
         lead = asyncio.run(repo.get_by_id(lead_id))
         assert lead is not None
@@ -185,8 +197,8 @@ class TestE2EWidget:
         assert submit_resp.status_code == 201
         lead_id = submit_resp.json()["lead_id"]
 
-        from app.services.lead_worker import run_enrichment_job
         import app.services.lead_worker as lw
+        from app.services.lead_worker import run_enrichment_job
 
         shared_repo = lead_service._get_or_create_repo()
 
@@ -214,7 +226,8 @@ class TestE2EWidget:
         monkeypatch.setattr(lw, "get_current_job", lambda: mock_job)
         monkeypatch.setattr(lw, "update_enrichment_job", MagicMock())
         monkeypatch.setattr(
-            lw, "geo_enrich",
+            lw,
+            "geo_enrich",
             lambda ip: {
                 "country": "United States",
                 "city": "Mountain View",

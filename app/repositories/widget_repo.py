@@ -43,9 +43,7 @@ class WidgetRepository:
             return None
         return self._row_to_response(record)
 
-    async def get_by_id_raw(
-        self, widget_id: str
-    ) -> dict | None:
+    async def get_by_id_raw(self, widget_id: str) -> dict | None:
         record = self._widgets.get(widget_id)
         if record is None:
             return None
@@ -59,11 +57,7 @@ class WidgetRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[WidgetResponse], int]:
-        records = [
-            r
-            for r in self._widgets.values()
-            if r["tenant_id"] == tenant_id
-        ]
+        records = [r for r in self._widgets.values() if r["tenant_id"] == tenant_id]
         if search is not None:
             search_lower = search.lower()
             records = [r for r in records if search_lower in r["name"].lower()]

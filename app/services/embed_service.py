@@ -52,9 +52,3 @@ async def get_widget_config(widget_id: str) -> dict | None:
             pass
 
     return result
-
-
-async def generate_snippet(widget_id: str, js_version: int) -> str:
-    from app.services.widget_js import generate_script_tag
-
-    return generate_script_tag(widget_id, js_version)

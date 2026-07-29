@@ -19,20 +19,19 @@ class TestCreateAIJob:
         )
         assert response.status_code == 202
 
-    def test_post_missing_prompt_returns_400(self, client: TestClient):
+    def test_post_missing_prompt_returns_422(self, client: TestClient):
         response = client.post(
             "/ai",
             json={"model": "llama3-8b-8192"},
         )
-        assert response.status_code == 400
-        assert "error" in response.json()
+        assert response.status_code == 422
 
-    def test_post_empty_prompt_returns_400(self, client: TestClient):
+    def test_post_empty_prompt_returns_422(self, client: TestClient):
         response = client.post(
             "/ai",
             json={"prompt": "", "model": "llama3-8b-8192"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_same_idempotency_key_returns_same_job_id(self, client: TestClient):
         response1 = client.post(
@@ -71,7 +70,7 @@ class TestGetJobStatus:
         response = client.get("/jobs/unknown-id")
         assert response.status_code == 404
         data = response.json()
-        assert data["error"] == "Job not found"
+        assert data["detail"] == "Job not found"
 
     def test_queued_status(self, client: TestClient, monkeypatch):
         _inject_job(monkeypatch, "test-job-1", {"status": "queued"})
@@ -175,13 +174,13 @@ class TestListJobs:
         data = response.json()
         assert len(data["jobs"]) == 3
 
-    def test_list_jobs_invalid_limit_returns_400(self, client: TestClient):
+    def test_list_jobs_invalid_limit_returns_422(self, client: TestClient):
         response = client.get("/jobs?limit=0")
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_list_jobs_limit_too_high_clamps(self, client: TestClient):
         response = client.get("/jobs?limit=200")
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 def _inject_job(monkeypatch, job_id: str, data: dict):
@@ -191,15 +190,15 @@ def _inject_job(monkeypatch, job_id: str, data: dict):
 
 
 class TestErrorResponses:
-    def test_404_returns_json_error(self, client: TestClient):
+    def test_404_returns_json_detail(self, client: TestClient):
         response = client.get("/jobs/nonexistent")
         assert response.status_code == 404
-        assert "error" in response.json()
+        assert "detail" in response.json()
 
-    def test_400_returns_json_error(self, client: TestClient):
+    def test_422_returns_json_detail(self, client: TestClient):
         response = client.post("/ai", json={"prompt": ""})
-        assert response.status_code == 400
-        assert "error" in response.json()
+        assert response.status_code == 422
+        assert "detail" in response.json()
 
     def test_no_stack_trace_in_error(self, client: TestClient):
         response = client.get("/jobs/nonexistent")

@@ -23,7 +23,7 @@ class TestGetReport:
         response = client.get("/reports/unknown-id")
         assert response.status_code == 404
         data = response.json()
-        assert "error" in data
+        assert "detail" in data
 
     def test_get_report_returns_metadata(self, client: TestClient):
         create_resp = client.post("/reports")
@@ -113,7 +113,7 @@ class TestReportErrorResponses:
     def test_404_returns_json_error(self, client: TestClient):
         response = client.get("/reports/nonexistent")
         assert response.status_code == 404
-        assert "error" in response.json()
+        assert "detail" in response.json()
 
     def test_no_stack_trace_on_404(self, client: TestClient):
         response = client.get("/reports/nonexistent")

@@ -4,24 +4,21 @@ from contextlib import asynccontextmanager
 import redis
 import redis.asyncio as redis_ai
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.database import close_pool, get_pool, is_postgres_enabled
+from app.core.supabase import get_client_credentials
 from app.middleware.body_limit import BodyLimitMiddleware
 from app.routers import scrape, tasks
 from app.routers.ai import router as ai_router
 from app.routers.auth import auth_router, protected_router
 from app.routers.embed import router as embed_router
+from app.routers.leads import cross_router as leads_cross_router
+from app.routers.leads import dashboard_router as leads_dashboard_router
+from app.routers.leads import router as leads_router
 from app.routers.reports import router as reports_router
 from app.routers.widgets import router as widgets_router
-from app.routers.leads import router as leads_router
-from app.routers.leads import dashboard_router as leads_dashboard_router
-from app.routers.leads import cross_router as leads_cross_router
-from app.core.supabase import get_client_credentials
 
 load_dotenv()
 
@@ -102,41 +99,6 @@ app.include_router(leads_dashboard_router)
 app.include_router(leads_cross_router)
 
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    first_error = exc.errors()[0] if exc.errors() else {}
-    msg = first_error.get("msg", "Invalid request body")
-    return JSONResponse(status_code=400, content={"error": msg})
-
-
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.detail},
-    )
-
-
-@app.get("/")
-async def home():
-    info = {
-        "name": "Task API",
-        "version": "1.0",
-        "endpoints": ["/tasks", "/scrape"],
-    }
-    if get_redis():
-        info["redis"] = "connected"
-    return info
-
-
 @app.get("/public/info")
 async def public_info():
     return {"message": "Welcome stranger! This info is public."}
-
-
-@app.get("/health")
-async def health():
-    status = {"status": "ok"}
-    if get_redis():
-        status["redis"] = "connected"
-    return status

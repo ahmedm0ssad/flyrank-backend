@@ -38,19 +38,27 @@ async def validate_origin(request: Request, widget_id: UUID) -> bool:
 
     request_host = _parse_origin_host(origin_header)
     if not request_host:
-        logger.debug("Origin validation failed: could not parse host from %r", origin_header)
+        logger.debug(
+            "Origin validation failed: could not parse host from %r", origin_header
+        )
         return False
 
     allowed = _parse_origin_host(raw["domain"])
     if not allowed:
-        logger.debug("Origin validation failed: could not parse allowed domain %r", raw["domain"])
+        logger.debug(
+            "Origin validation failed: could not parse allowed domain %r", raw["domain"]
+        )
         return False
 
     if allowed.startswith("*."):
         base = allowed[2:]
         result = request_host == base or request_host.endswith("." + base)
         if not result:
-            logger.debug("Origin validation failed: wildcard %r does not match %r", allowed, request_host)
+            logger.debug(
+                "Origin validation failed: wildcard %r does not match %r",
+                allowed,
+                request_host,
+            )
         return result
 
     result = request_host == allowed

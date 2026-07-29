@@ -25,7 +25,8 @@ def _make_response(
         tenant_id=tenant_id or uuid.uuid4(),
         name=name,
         domain=domain,
-        config=config or {
+        config=config
+        or {
             "brand_color": "#2563eb",
             "button_text": "Get a Quote",
             "fields": ["name", "email"],
@@ -76,9 +77,7 @@ class TestListWidgets:
 
     def test_list_widgets_with_search(self, client, _mock_auth_and_service):
         mock_service, mock_user = _mock_auth_and_service
-        widget = _make_response(
-            name="Alpha", tenant_id=str(mock_user["id"])
-        )
+        widget = _make_response(name="Alpha", tenant_id=str(mock_user["id"]))
         mock_service.get_widgets.return_value = ([widget], 1)
 
         response = client.get("/widgets/?search=alpha")
@@ -98,7 +97,7 @@ class TestListWidgets:
         assert data["items"] == []
 
     def test_list_widgets_401_without_auth(self, client):
-        from fastapi import HTTPException, status
+        from fastapi import HTTPException
 
         def mock_no_user():
             raise HTTPException(status_code=401, detail="Access token required")
@@ -138,12 +137,12 @@ class TestCreateWidget:
         data = response.json()
         assert data["name"] == "New Widget"
 
-    def test_create_widget_400_invalid(self, client, _mock_auth_and_service):
+    def test_create_widget_422_invalid(self, client, _mock_auth_and_service):
         response = client.post(
             "/widgets/",
             json={"name": "", "domain": "not-a-url"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_create_widget_409_duplicate(self, client, _mock_auth_and_service):
         mock_service, _ = _mock_auth_and_service
@@ -162,10 +161,10 @@ class TestCreateWidget:
             },
         )
         assert response.status_code == 409
-        assert "already exists" in response.json()["error"]
+        assert "already exists" in response.json()["detail"]
 
     def test_create_widget_401_without_auth(self, client):
-        from fastapi import HTTPException, status
+        from fastapi import HTTPException
 
         def mock_no_user():
             raise HTTPException(status_code=401, detail="Access token required")
@@ -241,12 +240,12 @@ class TestUpdateWidget:
         )
         assert response.status_code == 404
 
-    def test_update_widget_400(self, client, _mock_auth_and_service):
+    def test_update_widget_422(self, client, _mock_auth_and_service):
         response = client.put(
             f"/widgets/{uuid.uuid4()}",
             json={"name": ""},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestDeleteWidget:

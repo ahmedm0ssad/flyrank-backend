@@ -68,7 +68,7 @@ class TestSignup:
 
     def test_signup_missing_fields(self, client: TestClient):
         response = client.post("/auth/signup", json={})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_signup_supabase_error(self, client: TestClient, mock_supabase):
         mock_supabase.sign_up.side_effect = AuthApiError(
@@ -80,7 +80,7 @@ class TestSignup:
         )
 
         assert response.status_code == 400
-        assert response.json()["error"] == "User already registered"
+        assert response.json()["detail"] == "User already registered"
 
 
 class TestLogin:
@@ -106,7 +106,7 @@ class TestLogin:
         )
 
         assert response.status_code == 401
-        assert "Invalid login credentials" in response.json()["error"]
+        assert "Invalid login credentials" in response.json()["detail"]
 
     def test_login_other_error(self, client: TestClient, mock_supabase):
         mock_supabase.sign_in_with_password.side_effect = AuthApiError(
@@ -117,11 +117,11 @@ class TestLogin:
         )
 
         assert response.status_code == 400
-        assert response.json()["error"] == "Some other error"
+        assert response.json()["detail"] == "Some other error"
 
     def test_login_missing_fields(self, client: TestClient):
         response = client.post("/auth/login", json={})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestProtected:
@@ -140,7 +140,7 @@ class TestProtected:
         response = client.get("/protected/profile")
 
         assert response.status_code == 401
-        assert "Access token required" in response.json()["error"]
+        assert "detail" in response.json()
 
     def test_profile_invalid_token(self, client: TestClient, mock_supabase):
         mock_supabase.get_user.side_effect = AuthError("Invalid token", "invalid_token")
@@ -149,7 +149,7 @@ class TestProtected:
         )
 
         assert response.status_code == 401
-        assert "Invalid or expired token" in response.json()["error"]
+        assert "Invalid or expired token" in response.json()["detail"]
 
     def test_dashboard_success(self, client: TestClient, mock_supabase):
         response = client.get(

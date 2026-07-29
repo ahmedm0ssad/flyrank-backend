@@ -4,9 +4,9 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from supabase import AuthApiError, create_async_client
 
+from app.core.supabase import get_client_credentials, get_supabase
 from app.dependencies.auth import bearer_scheme, get_current_user
 from app.models.auth import AuthLogin, AuthSignup
-from app.core.supabase import get_client_credentials, get_supabase
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 protected_router = APIRouter(

@@ -25,9 +25,7 @@ class TestGetWidgetConfig:
         assert "honeypot_field" in data
 
     def test_config_404(self, client):
-        resp = client.get(
-            "/public/widget/00000000-0000-0000-0000-000000000000/config"
-        )
+        resp = client.get("/public/widget/00000000-0000-0000-0000-000000000000/config")
         assert resp.status_code == 404
 
     def test_config_cached(self, client, created_widget):
@@ -60,7 +58,9 @@ class TestGetWidgetJs:
         from app.services import widget_service
 
         widget_id = str(created_widget.id)
-        await widget_service.delete_widget(widget_id, "11111111-1111-1111-1111-111111111111")
+        await widget_service.delete_widget(
+            widget_id, "11111111-1111-1111-1111-111111111111"
+        )
 
         resp = client.get(f"/public/widget/{widget_id}/widget.js?v=1")
         assert resp.status_code == 410

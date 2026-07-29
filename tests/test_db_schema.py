@@ -43,14 +43,12 @@ class TestDBSchema:
     async def test_indexes_exist(self):
         conn = await asyncpg.connect(DATABASE_URL)
         try:
-            rows = await conn.fetch(
-                """
+            rows = await conn.fetch("""
                 SELECT indexname
                 FROM pg_indexes
                 WHERE tablename IN ('widgets', 'leads', 'rate_limits')
                 ORDER BY indexname
-                """
-            )
+                """)
             found = {r["indexname"] for r in rows}
             missing = EXPECTED_INDEXES - found
             assert not missing, f"Missing indexes: {missing}"

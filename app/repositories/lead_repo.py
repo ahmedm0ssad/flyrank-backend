@@ -81,9 +81,18 @@ class LeadRepository:
             if r["widget_id"] == widget_id and r["tenant_id"] == tenant_id
         ]
         return self._apply_filters_and_paginate(
-            records, include_honeypot, page, page_size,
-            search, status, spam_min, spam_max,
-            date_from, date_to, sort_by, sort_order,
+            records,
+            include_honeypot,
+            page,
+            page_size,
+            search,
+            status,
+            spam_min,
+            spam_max,
+            date_from,
+            date_to,
+            sort_by,
+            sort_order,
         )
 
     async def list_by_tenant(
@@ -103,27 +112,30 @@ class LeadRepository:
     ) -> tuple[list[LeadResponse], int]:
         records = [r for r in self._leads.values() if r["tenant_id"] == tenant_id]
         return self._apply_filters_and_paginate(
-            records, include_honeypot, page, page_size,
-            search, status, spam_min, spam_max,
-            date_from, date_to, sort_by, sort_order,
+            records,
+            include_honeypot,
+            page,
+            page_size,
+            search,
+            status,
+            spam_min,
+            spam_max,
+            date_from,
+            date_to,
+            sort_by,
+            sort_order,
         )
 
-    async def get_stats(
-        self, widget_id: str, tenant_id: str
-    ) -> dict[str, Any]:
+    async def get_stats(self, widget_id: str, tenant_id: str) -> dict[str, Any]:
         records = [
-            r for r in self._leads.values()
+            r
+            for r in self._leads.values()
             if r["widget_id"] == widget_id and r["tenant_id"] == tenant_id
         ]
         return self._compute_stats(records)
 
-    async def get_tenant_stats(
-        self, tenant_id: str
-    ) -> dict[str, Any]:
-        records = [
-            r for r in self._leads.values()
-            if r["tenant_id"] == tenant_id
-        ]
+    async def get_tenant_stats(self, tenant_id: str) -> dict[str, Any]:
+        records = [r for r in self._leads.values() if r["tenant_id"] == tenant_id]
         return self._compute_stats(records)
 
     async def get_export_data(
@@ -134,7 +146,8 @@ class LeadRepository:
         date_to: date | None = None,
     ) -> list[dict[str, Any]]:
         records = [
-            r for r in self._leads.values()
+            r
+            for r in self._leads.values()
             if r["widget_id"] == widget_id and r["tenant_id"] == tenant_id
         ]
         if date_from:
@@ -200,10 +213,10 @@ class LeadRepository:
         if search:
             q = search.lower()
             records = [
-                r for r in records
+                r
+                for r in records
                 if any(
-                    q in str(r["form_data"].get(f, "")).lower()
-                    for f in _SEARCH_FIELDS
+                    q in str(r["form_data"].get(f, "")).lower() for f in _SEARCH_FIELDS
                 )
             ]
 
@@ -247,9 +260,7 @@ class LeadRepository:
         this_month = sum(1 for r in non_honeypot if r["created_at"] >= month_start)
 
         spam_scores = [r["spam_score"] for r in non_honeypot]
-        avg_spam_score = (
-            sum(spam_scores) / len(spam_scores) if spam_scores else 0.0
-        )
+        avg_spam_score = sum(spam_scores) / len(spam_scores) if spam_scores else 0.0
 
         honeypot_blocked = sum(1 for r in all_records if r["honeypot_triggered"])
 
@@ -259,8 +270,7 @@ class LeadRepository:
             if c:
                 country_counts[c] += 1
         top_countries = [
-            {"country": c, "count": n}
-            for c, n in country_counts.most_common(10)
+            {"country": c, "count": n} for c, n in country_counts.most_common(10)
         ]
 
         thirty_days_ago = now - timedelta(days=30)
@@ -270,8 +280,7 @@ class LeadRepository:
                 day_key = r["created_at"].strftime("%Y-%m-%d")
                 daily_counts[day_key] += 1
         leads_over_time = [
-            {"date": d, "count": n}
-            for d, n in sorted(daily_counts.items())
+            {"date": d, "count": n} for d, n in sorted(daily_counts.items())
         ]
 
         return {

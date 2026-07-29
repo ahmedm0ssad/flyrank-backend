@@ -11,10 +11,6 @@ class ReportStatus(str, Enum):
     FAILED = "failed"
 
 
-class ReportCreate(BaseModel):
-    pass
-
-
 class ReportResponse(BaseModel):
     report_id: int
     job_id: str

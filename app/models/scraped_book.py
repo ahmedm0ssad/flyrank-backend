@@ -15,13 +15,6 @@ class ScrapedBookCreate(BaseModel):
     image_url: str | None = None
 
 
-class ScrapedBookUpdate(BaseModel):
-    price: float | None = None
-    availability: str | None = None
-    rating: int | None = None
-    description: str | None = None
-
-
 class ScrapedBookResponse(BaseModel):
     id: int
     url: str

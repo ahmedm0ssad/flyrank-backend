@@ -4,56 +4,29 @@ from fastapi.testclient import TestClient
 
 
 class TestHomeEndpoint:
-    def test_home_returns_info(self, client: TestClient):
+    def test_home_not_found(self, client: TestClient):
         response = client.get("/")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["name"] == "Task API"
-        assert data["version"] == "1.0"
-        assert "/tasks" in data["endpoints"]
-        assert "/scrape" in data["endpoints"]
-        assert "redis" not in data
-
-    def test_home_with_redis_connected(self, client: TestClient, monkeypatch):
-        fake_redis = object()
-        monkeypatch.setattr("app.main.get_redis", lambda: fake_redis)
-
-        response = client.get("/")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["redis"] == "connected"
+        assert response.status_code == 404
 
 
 class TestHealthEndpoint:
-    def test_health_returns_ok(self, client: TestClient):
+    def test_health_not_found(self, client: TestClient):
         response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert "redis" not in data
-
-    def test_health_with_redis_connected(self, client: TestClient, monkeypatch):
-        fake_redis = object()
-        monkeypatch.setattr("app.main.get_redis", lambda: fake_redis)
-
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["redis"] == "connected"
+        assert response.status_code == 404
 
 
 class TestValidationErrorHandler:
-    def test_validation_error_returns_400(self, client: TestClient):
+    def test_validation_error_returns_422(self, client: TestClient):
         response = client.post("/tasks/", json={"title": "", "done": False})
-        assert response.status_code == 400
-        assert "error" in response.json()
+        assert response.status_code == 422
+        assert "detail" in response.json()
 
     def test_validation_error_message(self, client: TestClient):
         response = client.post("/tasks/", json={})
-        assert response.status_code == 400
+        assert response.status_code == 422
         data = response.json()
-        assert isinstance(data["error"], str)
-        assert len(data["error"]) > 0
+        assert isinstance(data["detail"], list)
+        assert len(data["detail"]) > 0
 
 
 class TestHTTPExceptionHandler:
@@ -67,5 +40,5 @@ class TestHTTPExceptionHandler:
         response = client.get("/tasks/999")
         assert response.status_code == 404
         data = response.json()
-        assert "error" in data
-        assert "999" in data["error"]
+        assert "detail" in data
+        assert "999" in data["detail"]

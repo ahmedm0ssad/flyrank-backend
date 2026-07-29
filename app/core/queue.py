@@ -41,16 +41,6 @@ def get_report_queue() -> Queue:
     return _report_queue
 
 
-def reset_connection():
-    global _connection, _queue, _report_queue, _enrichment_queue
-    if _connection:
-        _connection.close()
-    _connection = None
-    _queue = None
-    _report_queue = None
-    _enrichment_queue = None
-
-
 def create_job(
     payload: dict, idempotency_key: str | None = None
 ) -> tuple[str, JobStatus]:
@@ -172,24 +162,6 @@ def create_report_job() -> tuple[str, JobStatus]:
     return job_id, JobStatus.QUEUED
 
 
-def get_report_job(job_id: str) -> JobResponse | None:
-    conn = get_connection()
-    data = conn.hgetall(f"report_job:{job_id}")
-    if not data:
-        return None
-
-    return JobResponse(
-        job_id=job_id,
-        status=JobStatus(data.get("status", JobStatus.QUEUED.value)),
-        result=data.get("result"),
-        error=data.get("error"),
-        created_at=data.get("created_at"),
-        started_at=data.get("started_at"),
-        finished_at=data.get("finished_at"),
-        attempts=int(data.get("attempts", 0)),
-    )
-
-
 def update_report_job(job_id: str, status: str, **extra):
     conn = get_connection()
     now = datetime.now(timezone.utc).isoformat()
@@ -234,24 +206,6 @@ def create_enrichment_job(lead_id: str) -> str:
     )
 
     return job_id
-
-
-def get_enrichment_job(job_id: str) -> JobResponse | None:
-    conn = get_connection()
-    data = conn.hgetall(f"enrichment_job:{job_id}")
-    if not data:
-        return None
-
-    return JobResponse(
-        job_id=job_id,
-        status=JobStatus(data.get("status", JobStatus.QUEUED.value)),
-        result=data.get("result"),
-        error=data.get("error"),
-        created_at=data.get("created_at"),
-        started_at=data.get("started_at"),
-        finished_at=data.get("finished_at"),
-        attempts=int(data.get("attempts", 0)),
-    )
 
 
 def update_enrichment_job(job_id: str, status: str, **extra):

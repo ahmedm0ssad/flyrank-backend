@@ -83,7 +83,7 @@ class TestE2ESqlite:
         # GET /tasks/{id} — confirm 404 after deletion
         resp = client.get(f"/tasks/{task_id}")
         assert resp.status_code == 404
-        assert "not found" in resp.json()["error"].lower()
+        assert "not found" in resp.json()["detail"].lower()
 
         # GET /stats — final count reflects deletion
         resp = client.get("/stats")

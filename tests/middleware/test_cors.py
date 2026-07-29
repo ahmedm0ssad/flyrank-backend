@@ -22,7 +22,11 @@ class _FakeAsyncRedis:
         return True
 
     def pipeline(self):
-        return self._sync.pipeline() if hasattr(self._sync, 'pipeline') else _FakePipeline(self._sync)
+        return (
+            self._sync.pipeline()
+            if hasattr(self._sync, "pipeline")
+            else _FakePipeline(self._sync)
+        )
 
     async def expire(self, key, ttl):
         self._sync.expire(key, ttl)
@@ -159,12 +163,16 @@ class TestCorsHeaders:
 class TestOriginValidationViaSubmit:
     @pytest.mark.asyncio
     async def test_origin_exact_match_accepted(self, created_widget):
-        from app.services.lead_service import submit_lead
         from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
-            headers = {"origin": "https://myshop.com", "user-agent": "test", "referer": ""}
+            headers = {
+                "origin": "https://myshop.com",
+                "user-agent": "test",
+                "referer": "",
+            }
 
         body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
         lead, was_dedup = await submit_lead(str(created_widget.id), body, FakeRequest())
@@ -173,13 +181,18 @@ class TestOriginValidationViaSubmit:
 
     @pytest.mark.asyncio
     async def test_subdomain_suffix_bypass_rejected(self, created_widget):
-        from app.services.lead_service import submit_lead
-        from app.models.lead import LeadSubmit
         from fastapi import HTTPException
+
+        from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
-            headers = {"origin": "https://myshop.com.evil.com", "user-agent": "test", "referer": ""}
+            headers = {
+                "origin": "https://myshop.com.evil.com",
+                "user-agent": "test",
+                "referer": "",
+            }
 
         body = LeadSubmit(form_data={"name": "John"})
         with pytest.raises(HTTPException) as exc:
@@ -188,39 +201,56 @@ class TestOriginValidationViaSubmit:
 
     @pytest.mark.asyncio
     async def test_wildcard_matches_subdomain(self, created_wildcard_widget):
-        from app.services.lead_service import submit_lead
         from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
-            headers = {"origin": "https://shop.myshop.com", "user-agent": "test", "referer": ""}
+            headers = {
+                "origin": "https://shop.myshop.com",
+                "user-agent": "test",
+                "referer": "",
+            }
 
         body = LeadSubmit(form_data={"name": "John"})
-        lead, was_dedup = await submit_lead(str(created_wildcard_widget.id), body, FakeRequest())
+        lead, was_dedup = await submit_lead(
+            str(created_wildcard_widget.id), body, FakeRequest()
+        )
         assert lead is not None
 
     @pytest.mark.asyncio
     async def test_wildcard_matches_bare_domain(self, created_wildcard_widget):
-        from app.services.lead_service import submit_lead
         from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
-            headers = {"origin": "https://myshop.com", "user-agent": "test", "referer": ""}
+            headers = {
+                "origin": "https://myshop.com",
+                "user-agent": "test",
+                "referer": "",
+            }
 
         body = LeadSubmit(form_data={"name": "John"})
-        lead, was_dedup = await submit_lead(str(created_wildcard_widget.id), body, FakeRequest())
+        lead, was_dedup = await submit_lead(
+            str(created_wildcard_widget.id), body, FakeRequest()
+        )
         assert lead is not None
 
     @pytest.mark.asyncio
     async def test_wildcard_rejects_unrelated(self, created_wildcard_widget):
-        from app.services.lead_service import submit_lead
-        from app.models.lead import LeadSubmit
         from fastapi import HTTPException
+
+        from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
-            headers = {"origin": "https://evil.com", "user-agent": "test", "referer": ""}
+            headers = {
+                "origin": "https://evil.com",
+                "user-agent": "test",
+                "referer": "",
+            }
 
         body = LeadSubmit(form_data={"name": "John"})
         with pytest.raises(HTTPException) as exc:
@@ -229,9 +259,10 @@ class TestOriginValidationViaSubmit:
 
     @pytest.mark.asyncio
     async def test_missing_origin_rejected_on_post(self, created_widget):
-        from app.services.lead_service import submit_lead
-        from app.models.lead import LeadSubmit
         from fastapi import HTTPException
+
+        from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
@@ -244,9 +275,10 @@ class TestOriginValidationViaSubmit:
 
     @pytest.mark.asyncio
     async def test_empty_origin_rejected_on_post(self, created_widget):
-        from app.services.lead_service import submit_lead
-        from app.models.lead import LeadSubmit
         from fastapi import HTTPException
+
+        from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
@@ -259,9 +291,10 @@ class TestOriginValidationViaSubmit:
 
     @pytest.mark.asyncio
     async def test_malformed_origin_rejected(self, created_widget):
-        from app.services.lead_service import submit_lead
-        from app.models.lead import LeadSubmit
         from fastapi import HTTPException
+
+        from app.models.lead import LeadSubmit
+        from app.services.lead_service import submit_lead
 
         class FakeRequest:
             client = type("obj", (object,), {"host": "1.2.3.4"})()
@@ -284,7 +317,7 @@ class TestOriginValidationViaSubmit:
 
     @pytest.mark.asyncio
     async def test_idn_origin_normalization(self, created_widget):
-        from app.dependencies.embed import validate_origin, _normalize_host
+        from app.dependencies.embed import _normalize_host, validate_origin
 
         normalized = _normalize_host("пример.рф")
         assert normalized == "xn--e1afmkfd.xn--p1ai"

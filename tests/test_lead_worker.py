@@ -1,4 +1,3 @@
-import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -143,11 +142,8 @@ class TestRunEnrichmentJob:
         def fake_geo(ip):
             nonlocal geo_call_count
             geo_call_count += 1
-            return None
 
-        monkeypatch.setattr(
-            "app.services.lead_worker.geo_enrich", fake_geo
-        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", fake_geo)
 
         from app.services.lead_worker import run_enrichment_job
 
@@ -181,15 +177,9 @@ class TestRunEnrichmentJob:
             "app.repositories.lead_repo.LeadRepository.get_by_id",
             mock_get_by_id,
         )
-        monkeypatch.setattr(
-            "app.services.lead_worker.geo_enrich", lambda ip: None
-        )
-        monkeypatch.setattr(
-            "app.services.lead_worker.send_alert", MagicMock()
-        )
-        monkeypatch.setattr(
-            "app.services.lead_worker.logger", MagicMock()
-        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
+        monkeypatch.setattr("app.services.lead_worker.send_alert", MagicMock())
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
 
         from app.services.lead_worker import run_enrichment_job
 
@@ -227,15 +217,9 @@ class TestRunEnrichmentJob:
             "app.repositories.lead_repo.LeadRepository.get_by_id",
             mock_get_by_id,
         )
-        monkeypatch.setattr(
-            "app.services.lead_worker.geo_enrich", lambda ip: None
-        )
-        monkeypatch.setattr(
-            "app.services.lead_worker.send_alert", MagicMock()
-        )
-        monkeypatch.setattr(
-            "app.services.lead_worker.logger", MagicMock()
-        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
+        monkeypatch.setattr("app.services.lead_worker.send_alert", MagicMock())
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
 
         from app.services.lead_worker import run_enrichment_job
 
@@ -270,21 +254,15 @@ class TestRunEnrichmentJob:
             "app.repositories.lead_repo.LeadRepository.get_by_id",
             mock_get_by_id,
         )
-        monkeypatch.setattr(
-            "app.services.lead_worker.geo_enrich", lambda ip: None
-        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
 
         alerts = []
 
         def fake_alert(msg):
             alerts.append(msg)
 
-        monkeypatch.setattr(
-            "app.services.lead_worker.send_alert", fake_alert
-        )
-        monkeypatch.setattr(
-            "app.services.lead_worker.logger", MagicMock()
-        )
+        monkeypatch.setattr("app.services.lead_worker.send_alert", fake_alert)
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
 
         from app.services.lead_worker import run_enrichment_job
 
@@ -319,9 +297,7 @@ class TestRunEnrichmentJob:
             "app.repositories.lead_repo.LeadRepository.get_by_id",
             mock_get_by_id,
         )
-        monkeypatch.setattr(
-            "app.services.lead_worker.geo_enrich", lambda ip: None
-        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
 
         lead_updates = []
 
@@ -333,12 +309,8 @@ class TestRunEnrichmentJob:
             "app.repositories.lead_repo.LeadRepository.update_status",
             mock_update_status,
         )
-        monkeypatch.setattr(
-            "app.services.lead_worker.send_alert", MagicMock()
-        )
-        monkeypatch.setattr(
-            "app.services.lead_worker.logger", MagicMock()
-        )
+        monkeypatch.setattr("app.services.lead_worker.send_alert", MagicMock())
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
 
         from app.services.lead_worker import run_enrichment_job
 

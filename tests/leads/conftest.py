@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 
 from app.models.widget import WidgetCreate
@@ -23,7 +21,11 @@ class _FakeAsyncRedis:
         return True
 
     def pipeline(self):
-        return self._sync.pipeline() if hasattr(self._sync, 'pipeline') else _FakePipeline(self._sync)
+        return (
+            self._sync.pipeline()
+            if hasattr(self._sync, "pipeline")
+            else _FakePipeline(self._sync)
+        )
 
     async def expire(self, key, ttl):
         self._sync.expire(key, ttl)

@@ -1,6 +1,4 @@
-import datetime
 from datetime import date
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -12,7 +10,9 @@ pytestmark = pytest.mark.usefixtures("mock_redis")
 
 
 class FakeRequest:
-    def __init__(self, ip="127.0.0.1", origin="https://myshop.com", ua="test-agent", referer=""):
+    def __init__(
+        self, ip="127.0.0.1", origin="https://myshop.com", ua="test-agent", referer=""
+    ):
         self.client = type("obj", (object,), {"host": ip})()
         self.headers = {
             "origin": origin,
@@ -43,11 +43,13 @@ class TestSubmitLead:
         raw = await widget_service._get_repo().get_by_id_raw(widget_id)
         honeypot_field = raw["config"].get("honeypot_field", "_hp_a3f9")
 
-        body = LeadSubmit(form_data={
-            "name": "Bot",
-            "email": "bot@spam.com",
-            honeypot_field: "filled by bot",
-        })
+        body = LeadSubmit(
+            form_data={
+                "name": "Bot",
+                "email": "bot@spam.com",
+                honeypot_field: "filled by bot",
+            }
+        )
         request = FakeRequest()
 
         lead, was_dedup = await lead_service.submit_lead(widget_id, body, request)
@@ -60,11 +62,13 @@ class TestSubmitLead:
     @pytest.mark.asyncio
     async def test_spam_high_branch(self, created_widget):
         widget_id = str(created_widget.id)
-        body = LeadSubmit(form_data={
-            "name": "John",
-            "email": "john@mailinator.com",
-            "message": "https://spam.com/buy-now",
-        })
+        body = LeadSubmit(
+            form_data={
+                "name": "John",
+                "email": "john@mailinator.com",
+                "message": "https://spam.com/buy-now",
+            }
+        )
         request = FakeRequest()
 
         lead, was_dedup = await lead_service.submit_lead(widget_id, body, request)
@@ -160,14 +164,18 @@ class TestDashboardService:
         request = FakeRequest()
         await lead_service.submit_lead(widget_id, body, request)
 
-        hp_body = LeadSubmit(form_data={
-            "name": "Bot",
-            "email": "bot@spam.com",
-            raw["config"]["honeypot_field"]: "value",
-        })
+        hp_body = LeadSubmit(
+            form_data={
+                "name": "Bot",
+                "email": "bot@spam.com",
+                raw["config"]["honeypot_field"]: "value",
+            }
+        )
         await lead_service.submit_lead(widget_id, hp_body, request)
 
-        stats = await lead_service.get_widget_stats(widget_id, tenant_id, skip_cache=True)
+        stats = await lead_service.get_widget_stats(
+            widget_id, tenant_id, skip_cache=True
+        )
         assert stats["total_leads"] == 1
         assert stats["honeypot_blocked"] == 1
 
@@ -261,8 +269,10 @@ class TestDashboardService:
         repo = lead_service._get_or_create_repo()
         for i in range(3):
             lead = await repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": f"User {i}"}, ip_address="1.1.1.1",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": f"User {i}"},
+                ip_address="1.1.1.1",
                 fingerprint=f"fp-batch-{i}",
             )
             ids.append(str(lead.id))

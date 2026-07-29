@@ -69,8 +69,6 @@ SPAM_WEIGHTS: dict[str, float] = {
     "disposable_email_domain": 0.4,
 }
 
-SPAM_THRESHOLD = 0.5
-
 
 def score_submission(form_data: dict[str, Any]) -> tuple[float, list[str]]:
     all_reasons: list[str] = []

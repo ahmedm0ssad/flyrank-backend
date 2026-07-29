@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock
-
 from fastapi.testclient import TestClient
 
 from app.models.job import JobStatus
@@ -16,7 +14,8 @@ class TestQueueModule:
         conn2 = queue_module.get_connection()
         assert conn1 is conn2
 
-        queue_module.reset_connection()
+        queue_module._connection = None
+        queue_module._queue = None
 
     def test_get_queue_returns_singleton(self, monkeypatch):
         from app.core import queue as queue_module
@@ -28,17 +27,8 @@ class TestQueueModule:
         q2 = queue_module.get_queue()
         assert q1 is q2
 
-        queue_module.reset_connection()
-
-    def test_reset_connection_clears_singletons(self, monkeypatch):
-        from app.core import queue as queue_module
-
-        queue_module._connection = MagicMock()
-        queue_module._queue = MagicMock()
-
-        queue_module.reset_connection()
-        assert queue_module._connection is None
-        assert queue_module._queue is None
+        queue_module._connection = None
+        queue_module._queue = None
 
     def test_create_job_returns_job_id_and_status(self, monkeypatch):
         from app.core import queue as queue_module
@@ -229,13 +219,13 @@ class TestJobIdempotency:
 
 
 class TestErrorHandling:
-    def test_invalid_payload_returns_400(self, client: TestClient):
+    def test_invalid_payload_returns_422(self, client: TestClient):
         response = client.post("/ai", json={})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
-    def test_missing_prompt_field_returns_400(self, client: TestClient):
+    def test_missing_prompt_field_returns_422(self, client: TestClient):
         response = client.post("/ai", json={"model": "test"})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_wrong_method_returns_405(self, client: TestClient):
         response = client.put("/ai", json={"prompt": "Hello"})
@@ -364,34 +354,11 @@ class TestEnrichmentQueue:
         )
         assert _fake_queue.enqueued_jobs[0]["args"] == ("lead-abc",)
 
-    def test_get_enrichment_job_returns_none_for_missing(self, monkeypatch):
-        from app.core import queue as queue_module
-
-        result = queue_module.get_enrichment_job("nonexistent")
-        assert result is None
-
-    def test_get_enrichment_job_returns_job_response(self, monkeypatch):
-        from app.core import queue as queue_module
-        from tests.conftest import _fake_redis
-
-        _fake_redis.hset(
-            "enrichment_job:test-1",
-            mapping={"status": "finished", "result": "enriched"},
-        )
-
-        job = queue_module.get_enrichment_job("test-1")
-        assert job is not None
-        assert job.job_id == "test-1"
-        assert job.status == JobStatus.FINISHED
-        assert job.result == "enriched"
-
     def test_update_enrichment_job_changes_status(self, monkeypatch):
         from app.core import queue as queue_module
         from tests.conftest import _fake_redis
 
-        _fake_redis.hset(
-            "enrichment_job:test-2", mapping={"status": "queued"}
-        )
+        _fake_redis.hset("enrichment_job:test-2", mapping={"status": "queued"})
 
         queue_module.update_enrichment_job(
             "test-2", "started", started_at="2025-01-01T00:00:00"
@@ -408,7 +375,7 @@ class TestEnrichmentQueue:
         q2 = queue_module.get_enrichment_queue()
         assert q1 is q2
 
-        queue_module.reset_connection()
+        queue_module._enrichment_queue = None
 
     def test_enrichment_retry_config_matches_report_jobs(self, monkeypatch):
         from app.core import queue as queue_module
@@ -450,7 +417,7 @@ class TestFailureHandling:
         assert response.status_code == 404
         assert "File" not in response.text
 
-    def test_no_stack_trace_on_400(self, client: TestClient):
+    def test_no_stack_trace_on_422(self, client: TestClient):
         response = client.post("/ai", json={"prompt": ""})
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert "File" not in response.text

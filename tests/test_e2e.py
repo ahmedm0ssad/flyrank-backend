@@ -86,7 +86,7 @@ def test_2_signup_duplicate_email():
     )
     print(f"\n[SIGNUP DUPE] status={r.status_code} body={r.text}")
     assert r.status_code == 400, f"Expected 400, got {r.status_code}: {r.text}"
-    assert "error" in r.json()
+    assert "detail" in r.json()
 
 
 def test_3_login_correct():
@@ -114,7 +114,7 @@ def test_4_login_wrong_password():
     )
     print(f"\n[LOGIN BAD PW] status={r.status_code} body={r.text}")
     assert r.status_code == 401, f"Expected 401, got {r.status_code}: {r.text}"
-    assert r.json() == {"error": "Invalid login credentials"}
+    assert r.json() == {"detail": "Invalid login credentials"}
 
 
 def test_5_public_info():
@@ -128,7 +128,7 @@ def test_6_profile_no_token():
     r = requests.get(_url("/protected/profile"))
     print(f"\n[PROFILE NO TOKEN] status={r.status_code} body={r.text}")
     assert r.status_code == 401
-    assert r.json() == {"error": "Access token required"}
+    assert r.json() == {"detail": "Access token required"}
 
 
 def test_7_profile_valid_token():
@@ -154,7 +154,7 @@ def test_8_profile_tampered_token():
     )
     print(f"\n[PROFILE TAMPERED] status={r.status_code} body={r.text}")
     assert r.status_code == 401, f"Expected 401, got {r.status_code}: {r.text}"
-    assert r.json() == {"error": "Invalid or expired token"}
+    assert r.json() == {"detail": "Invalid or expired token"}
 
 
 def test_9_dashboard_valid_token():

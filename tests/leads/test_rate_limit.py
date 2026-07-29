@@ -1,6 +1,9 @@
 import pytest
 
-from app.dependencies.leads import check_rate_limits, RATE_LIMIT_TIERS, RATE_LIMIT_WINDOW, _in_process_limits
+from app.dependencies.leads import (
+    _in_process_limits,
+    check_rate_limits,
+)
 
 
 class _FakeCountRedis:
@@ -101,7 +104,9 @@ class TestRateLimits:
         limit = 100
         for _ in range(limit + 1):
             retry_after = await check_rate_limits(ip, "widget-1")
-        assert retry_after is not None, "in-process limiter should block after exceeding limit"
+        assert (
+            retry_after is not None
+        ), "in-process limiter should block after exceeding limit"
 
     async def test_redis_down_in_process_per_ip_isolation(self, monkeypatch):
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
@@ -111,7 +116,9 @@ class TestRateLimits:
         retry_after = await check_rate_limits("5.6.7.8", "widget-1")
         assert retry_after is None, "different IP should not be blocked"
 
-    async def test_redis_down_redis_error_falls_to_in_process(self, monkeypatch, monkey_redis):
+    async def test_redis_down_redis_error_falls_to_in_process(
+        self, monkeypatch, monkey_redis
+    ):
         original_pipeline = monkey_redis.pipeline
 
         class BrokenRedis:
@@ -121,4 +128,6 @@ class TestRateLimits:
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: BrokenRedis())
 
         retry_after = await check_rate_limits("1.2.3.4", "widget-1")
-        assert retry_after is None, "should fall back to in-process limiter on Redis error"
+        assert (
+            retry_after is None
+        ), "should fall back to in-process limiter on Redis error"

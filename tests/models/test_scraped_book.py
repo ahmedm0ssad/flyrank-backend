@@ -6,7 +6,6 @@ from pydantic import ValidationError
 from app.models.scraped_book import (
     ScrapedBookCreate,
     ScrapedBookResponse,
-    ScrapedBookUpdate,
 )
 
 
@@ -57,25 +56,6 @@ class TestScrapedBookCreate:
     def test_rating_out_of_range_accepted(self):
         data = ScrapedBookCreate(url="http://example.com/book", title="Book", rating=10)
         assert data.rating == 10
-
-
-class TestScrapedBookUpdate:
-    def test_valid_update(self):
-        data = ScrapedBookUpdate(price=19.99, rating=4)
-        assert data.price == 19.99
-        assert data.rating == 4
-
-    def test_all_fields_optional(self):
-        data = ScrapedBookUpdate()
-        assert data.price is None
-        assert data.availability is None
-        assert data.rating is None
-        assert data.description is None
-
-    def test_partial_update(self):
-        data = ScrapedBookUpdate(description="New description")
-        assert data.description == "New description"
-        assert data.price is None
 
 
 class TestScrapedBookResponse:

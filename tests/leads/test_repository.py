@@ -86,7 +86,9 @@ class TestLeadRepository:
         )
         assert total2 == 2
 
-    async def test_list_by_widget_paginated(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_list_by_widget_paginated(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         for i in range(5):
             ld = dict(sample_lead)
             ld["fingerprint"] = f"fp-{i}"
@@ -113,7 +115,9 @@ class TestLeadRepository:
         assert total == 1
         assert items[0].form_data["name"] == "Alice"
 
-    async def test_list_by_widget_filter_status(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_list_by_widget_filter_status(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         await repo.create(**sample_lead)
         enriched = dict(sample_lead)
         enriched["fingerprint"] = "fp-enriched"
@@ -128,7 +132,9 @@ class TestLeadRepository:
         assert total == 1
         assert items[0].status == "enriched"
 
-    async def test_list_by_widget_filter_spam_range(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_list_by_widget_filter_spam_range(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         clean = dict(sample_lead, fingerprint="fp-clean", spam_score=0.0)
         await repo.create(**clean)
         spammy = dict(sample_lead, fingerprint="fp-spam", spam_score=0.8)
@@ -150,11 +156,15 @@ class TestLeadRepository:
         assert total2 == 1
         assert items2[0].spam_score == 0.0
 
-    async def test_list_by_widget_filter_date_range(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_list_by_widget_filter_date_range(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         old = dict(sample_lead, fingerprint="fp-old")
         old_lead = await repo.create(**old)
         old_lead_id = str(old_lead.id)
-        repo._leads[old_lead_id]["created_at"] = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        repo._leads[old_lead_id]["created_at"] = datetime(
+            2024, 1, 1, tzinfo=timezone.utc
+        )
 
         new = dict(sample_lead, fingerprint="fp-new")
         await repo.create(**new)
@@ -166,7 +176,9 @@ class TestLeadRepository:
         )
         assert total == 1
 
-    async def test_list_by_widget_sort_order(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_list_by_widget_sort_order(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         for i in range(3):
             ld = dict(sample_lead, fingerprint=f"fp-{i}")
             await repo.create(**ld)
@@ -197,7 +209,9 @@ class TestLeadRepository:
         items, total = await repo.list_by_tenant(tenant_id=tenant_id)
         assert total == 1
 
-        items2, total2 = await repo.list_by_tenant(tenant_id=tenant_id, include_honeypot=True)
+        items2, total2 = await repo.list_by_tenant(
+            tenant_id=tenant_id, include_honeypot=True
+        )
         assert total2 == 2
 
     async def test_get_stats(self, repo, sample_lead, widget_id, tenant_id):
@@ -209,7 +223,9 @@ class TestLeadRepository:
         assert stats["total_leads"] == 5
         assert stats["honeypot_blocked"] == 0
 
-    async def test_get_stats_honeypot_excluded_from_counts(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_get_stats_honeypot_excluded_from_counts(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         for i in range(3):
             ld = dict(sample_lead, fingerprint=f"fp-{i}")
             await repo.create(**ld)
@@ -220,7 +236,9 @@ class TestLeadRepository:
         assert stats["total_leads"] == 3
         assert stats["honeypot_blocked"] == 1
 
-    async def test_get_stats_top_countries(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_get_stats_top_countries(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         for country in ["US", "US", "GB", "DE"]:
             ld = dict(sample_lead, fingerprint=f"fp-{country}")
             c = await repo.create(**ld)
@@ -231,7 +249,9 @@ class TestLeadRepository:
         us_entry = [e for e in stats["top_countries"] if e["country"] == "US"]
         assert us_entry[0]["count"] == 2
 
-    async def test_get_stats_leads_over_time(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_get_stats_leads_over_time(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         now = datetime.now(timezone.utc)
         for i in range(3):
             ld = dict(sample_lead, fingerprint=f"fp-{i}")
@@ -264,10 +284,14 @@ class TestLeadRepository:
         assert "form_data" in data[0]
         assert str(data[0]["widget_id"]) == widget_id
 
-    async def test_get_export_data_with_date_filter(self, repo, sample_lead, widget_id, tenant_id):
+    async def test_get_export_data_with_date_filter(
+        self, repo, sample_lead, widget_id, tenant_id
+    ):
         old = dict(sample_lead, fingerprint="fp-old")
         old_lead = await repo.create(**old)
-        repo._leads[str(old_lead.id)]["created_at"] = datetime(2024, 6, 1, tzinfo=timezone.utc)
+        repo._leads[str(old_lead.id)]["created_at"] = datetime(
+            2024, 6, 1, tzinfo=timezone.utc
+        )
 
         new = dict(sample_lead, fingerprint="fp-new")
         await repo.create(**new)
@@ -295,9 +319,7 @@ class TestLeadRepository:
 
     async def test_delete_wrong_tenant(self, repo, sample_lead, widget_id):
         created = await repo.create(**sample_lead)
-        deleted = await repo.delete(
-            str(created.id), widget_id, str(uuid.uuid4())
-        )
+        deleted = await repo.delete(str(created.id), widget_id, str(uuid.uuid4()))
         assert deleted is False
 
     async def test_batch_delete(self, repo, sample_lead, widget_id, tenant_id):

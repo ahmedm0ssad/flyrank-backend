@@ -7,7 +7,6 @@ tasks.db
 .coverage
 htmlcov/
 screenshots/
-docs/
 .env.bak
 server.log
 AUDIT_REPORT.md

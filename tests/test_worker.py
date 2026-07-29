@@ -310,9 +310,9 @@ class TestWorkerEntryPoint:
         assert callable(run_worker)
 
     def test_enrichment_jobs_queue_in_watched_queues(self):
-        from app.core.worker import run_worker
-
         import inspect
+
+        from app.core.worker import run_worker
 
         source = inspect.getsource(run_worker)
         assert "ENRICHMENT_QUEUE_NAME" in source

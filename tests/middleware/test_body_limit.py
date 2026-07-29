@@ -28,6 +28,7 @@ class TestBodyLimitMiddleware:
 
     def test_exactly_at_limit_passes(self, client):
         import json
+
         body = json.dumps({"form_data": {"name": "John"}})
         resp = client.post(
             "/public/widget/00000000-0000-0000-0000-000000000000/submit",

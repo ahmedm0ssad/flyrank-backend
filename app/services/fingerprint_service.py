@@ -13,6 +13,7 @@ def compute_fingerprint(widget_id: str, ip: str, form_data: dict) -> str:
 def _get_redis():
     try:
         from app.main import get_redis
+
         return get_redis()
     except (ImportError, RuntimeError):
         return None

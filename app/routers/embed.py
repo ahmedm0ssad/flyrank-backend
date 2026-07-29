@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse, Response
 
 from app.services import embed_service

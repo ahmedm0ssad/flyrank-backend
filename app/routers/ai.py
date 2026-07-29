@@ -2,12 +2,12 @@ import logging
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
 
+from app.core.queue import create_job, get_job, list_jobs
 from app.models.job import (
     JobCreate,
     JobEnqueueResponse,
     JobListResponse,
 )
-from app.core.queue import create_job, get_job, list_jobs
 
 logger = logging.getLogger(__name__)
 

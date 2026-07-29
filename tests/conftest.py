@@ -124,7 +124,9 @@ def _no_postgres(monkeypatch):
     monkeypatch.setattr(
         "app.services.scraped_book_service.is_postgres_enabled", lambda: False
     )
-    monkeypatch.setattr("app.services.widget_service.is_postgres_enabled", lambda: False)
+    monkeypatch.setattr(
+        "app.services.widget_service.is_postgres_enabled", lambda: False
+    )
 
 
 @pytest.fixture
@@ -157,7 +159,11 @@ def sample_lead_data() -> dict:
     return {
         "widget_id": "00000000-0000-0000-0000-000000000001",
         "tenant_id": "00000000-0000-0000-0000-000000000002",
-        "form_data": {"name": "John Doe", "email": "john@example.com", "phone": "+1234567890"},
+        "form_data": {
+            "name": "John Doe",
+            "email": "john@example.com",
+            "phone": "+1234567890",
+        },
         "ip_address": "192.168.1.1",
         "fingerprint": "abc123def456",
         "user_agent": "test-agent",
@@ -183,7 +189,11 @@ class _FakeAsyncRedis:
         return True
 
     def pipeline(self):
-        return self._sync.pipeline() if hasattr(self._sync, 'pipeline') else _FakePipeline(self._sync._strings)
+        return (
+            self._sync.pipeline()
+            if hasattr(self._sync, "pipeline")
+            else _FakePipeline(self._sync._strings)
+        )
 
     async def expire(self, key, ttl):
         self._sync.expire(key, ttl)
@@ -213,5 +223,6 @@ def mock_redis(monkeypatch, fake_async_redis):
 @pytest.fixture
 def mock_lead_queue(monkeypatch):
     from tests.conftest import _fake_queue
+
     monkeypatch.setattr("app.core.queue.get_enrichment_queue", lambda: _fake_queue)
     return _fake_queue

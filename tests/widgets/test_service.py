@@ -1,11 +1,11 @@
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.services import widget_service
-from app.models.widget import WidgetCreate, WidgetResponse, WidgetUpdate
+from app.models.widget import WidgetCreate, WidgetUpdate
 from app.repositories.widget_repo import WidgetRepository
+from app.services import widget_service
 
 
 @pytest.fixture(autouse=True)
@@ -93,15 +93,11 @@ class TestWidgetService:
         update_data = WidgetUpdate(name="After Update")
         await widget_service.update_widget(str(created.id), tenant_id, update_data)
 
-        _redis_delete.assert_awaited_once_with(
-            f"widget:config:{created.id}"
-        )
+        _redis_delete.assert_awaited_once_with(f"widget:config:{created.id}")
 
         widget_service._redis_client = None
 
-    async def test_delete_widget_soft_delete(
-        self, mock_repo, tenant_id, sample_data
-    ):
+    async def test_delete_widget_soft_delete(self, mock_repo, tenant_id, sample_data):
         data = WidgetCreate(**sample_data)
         created = await widget_service.create_widget(data, tenant_id)
 
@@ -120,9 +116,7 @@ class TestWidgetService:
         result = await widget_service.get_widget(str(uuid.uuid4()), tenant_id)
         assert result is None
 
-    async def test_duplicate_domain_on_update(
-        self, mock_repo, tenant_id, sample_data
-    ):
+    async def test_duplicate_domain_on_update(self, mock_repo, tenant_id, sample_data):
         data1 = WidgetCreate(**sample_data)
         await widget_service.create_widget(data1, tenant_id)
 
@@ -137,9 +131,7 @@ class TestWidgetService:
 
         with pytest.raises(HTTPException) as exc:
             update_data = WidgetUpdate(domain="https://myshop.com")
-            await widget_service.update_widget(
-                str(created2.id), tenant_id, update_data
-            )
+            await widget_service.update_widget(str(created2.id), tenant_id, update_data)
         assert exc.value.status_code == 409
 
     async def test_inactive_widget_still_visible_via_service(
@@ -153,9 +145,7 @@ class TestWidgetService:
         assert result is not None
         assert result.active is False
 
-    async def test_list_widgets_pagination(
-        self, mock_repo, tenant_id, sample_data
-    ):
+    async def test_list_widgets_pagination(self, mock_repo, tenant_id, sample_data):
         for i in range(3):
             d = WidgetCreate(
                 name=f"Widget {i}",
@@ -170,11 +160,13 @@ class TestWidgetService:
         assert total == 3
         assert len(items) == 2
 
-    async def test_search_widgets_by_name(
-        self, mock_repo, tenant_id, sample_data
-    ):
-        d1 = WidgetCreate(name="Alpha Team", domain="https://alpha.com", config=sample_data["config"])
-        d2 = WidgetCreate(name="Beta Team", domain="https://beta.com", config=sample_data["config"])
+    async def test_search_widgets_by_name(self, mock_repo, tenant_id, sample_data):
+        d1 = WidgetCreate(
+            name="Alpha Team", domain="https://alpha.com", config=sample_data["config"]
+        )
+        d2 = WidgetCreate(
+            name="Beta Team", domain="https://beta.com", config=sample_data["config"]
+        )
         await widget_service.create_widget(d1, tenant_id)
         await widget_service.create_widget(d2, tenant_id)
 

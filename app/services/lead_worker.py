@@ -106,9 +106,7 @@ def run_enrichment_job(lead_id: str) -> str:
                 error=str(exc),
                 finished_at=_now(),
             )
-            logger.error(
-                "Enrichment job %s failed after all retries: %s", job_id, exc
-            )
+            logger.error("Enrichment job %s failed after all retries: %s", job_id, exc)
             send_alert(f"Geo enrichment failed for lead {lead_id}: {exc}")
 
         raise

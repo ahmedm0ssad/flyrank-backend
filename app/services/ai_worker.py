@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 
 from rq import get_current_job
 
-from app.models.job import JobStatus
 from app.core.queue import update_job
+from app.models.job import JobStatus
 from app.services.ai_service import call_ai
 from app.services.alert import send_alert
 

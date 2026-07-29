@@ -60,11 +60,11 @@ class TestGetTask:
         response = client.get("/tasks/999")
 
         assert response.status_code == 404
-        assert response.json() == {"error": "Task 999 not found"}
+        assert response.json() == {"detail": "Task 999 not found"}
 
     def test_get_task_invalid_id(self, client: TestClient):
         response = client.get("/tasks/abc")
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestCreateTask:
@@ -83,11 +83,11 @@ class TestCreateTask:
 
     def test_create_task_empty_title(self, client: TestClient):
         response = client.post("/tasks/", json={"title": "", "done": False})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_create_task_missing_title(self, client: TestClient):
         response = client.post("/tasks/", json={"done": False})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_create_task_default_done(self, client: TestClient, mock_task_service):
         async def side_effect(task_data):
@@ -121,15 +121,15 @@ class TestUpdateTask:
         response = client.put("/tasks/999", json={"title": "Nope", "done": False})
 
         assert response.status_code == 404
-        assert "999" in response.json()["error"]
+        assert "999" in response.json()["detail"]
 
     def test_update_task_invalid_data(self, client: TestClient):
         response = client.put("/tasks/1", json={"title": "", "done": False})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
-    def test_update_task_missing_done_returns_400(self, client: TestClient):
+    def test_update_task_missing_done_returns_422(self, client: TestClient):
         response = client.put("/tasks/1", json={"title": "No done"})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestGetStats:
@@ -162,4 +162,4 @@ class TestDeleteTask:
         response = client.delete("/tasks/999")
 
         assert response.status_code == 404
-        assert "999" in response.json()["error"]
+        assert "999" in response.json()["detail"]

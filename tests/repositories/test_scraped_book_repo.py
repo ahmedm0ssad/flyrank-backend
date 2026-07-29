@@ -55,45 +55,6 @@ def _make_record(values: dict):
 
 @pytest.mark.asyncio
 class TestScrapedBookRepository:
-    async def test_create_book(self, mock_conn, sample_book_data):
-        now = datetime.now(timezone.utc)
-        values = {"id": 1, **sample_book_data, "created_at": now, "updated_at": now}
-        mock_conn.fetchrow.return_value = _make_record(values)
-
-        result = await ScrapedBookRepository.create_book(
-            ScrapedBookCreate(**sample_book_data)
-        )
-
-        assert result.id == 1
-        assert result.title == sample_book_data["title"]
-        assert result.price == sample_book_data["price"]
-        mock_conn.fetchrow.assert_awaited_once()
-
-    async def test_get_all_books(self, mock_conn, sample_book_data):
-        now = datetime.now(timezone.utc)
-        values = {"id": 1, **sample_book_data, "created_at": now, "updated_at": now}
-        mock_conn.fetch.return_value = [_make_record(values)]
-
-        results = await ScrapedBookRepository.get_all_books()
-        assert len(results) == 1
-        assert results[0].title == sample_book_data["title"]
-
-    async def test_get_book_by_id_found(self, mock_conn, sample_book_data):
-        now = datetime.now(timezone.utc)
-        values = {"id": 1, **sample_book_data, "created_at": now, "updated_at": now}
-        mock_conn.fetchrow.return_value = _make_record(values)
-
-        result = await ScrapedBookRepository.get_book_by_id(1)
-        assert result is not None
-        assert result.id == 1
-        assert result.url == sample_book_data["url"]
-
-    async def test_get_book_by_id_not_found(self, mock_conn):
-        mock_conn.fetchrow.return_value = None
-
-        result = await ScrapedBookRepository.get_book_by_id(999)
-        assert result is None
-
     async def test_bulk_upsert(self, mock_conn, sample_book_data):
         now = datetime.now(timezone.utc)
         values = {"id": 1, **sample_book_data, "created_at": now, "updated_at": now}

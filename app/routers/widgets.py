@@ -3,7 +3,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.dependencies.auth import get_current_user
-from app.models.widget import PaginatedResponse, WidgetCreate, WidgetResponse, WidgetUpdate
+from app.models.widget import (
+    PaginatedResponse,
+    WidgetCreate,
+    WidgetResponse,
+    WidgetUpdate,
+)
 from app.services import widget_service
 
 router = APIRouter(prefix="/widgets", tags=["widgets"])

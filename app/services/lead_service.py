@@ -10,7 +10,7 @@ from fastapi import HTTPException, Request, status
 from app.dependencies.leads import check_origin, check_rate_limits
 from app.models.lead import LeadResponse, LeadSubmit
 from app.repositories.lead_repo import LeadRepository
-from app.services import embed_service, widget_service
+from app.services import embed_service
 from app.services.fingerprint_service import (
     check_dedup,
     compute_fingerprint,
@@ -31,11 +31,6 @@ _repo: LeadRepository | None = None
 _redis_client = None
 
 
-def _set_redis(client):
-    global _redis_client
-    _redis_client = client
-
-
 def _get_or_create_repo():
     global _repo
     if _repo is None:
@@ -48,6 +43,7 @@ async def _get_redis():
     if _redis_client is None:
         try:
             from app.main import get_redis
+
             _redis_client = get_redis()
         except (ImportError, RuntimeError):
             pass
@@ -63,7 +59,9 @@ async def _cache_stats(cache_key: str, stats: dict, ttl: int = 300):
             pass
 
 
-async def _invalidate_stats_cache(widget_id: str | None = None, tenant_id: str | None = None):
+async def _invalidate_stats_cache(
+    widget_id: str | None = None, tenant_id: str | None = None
+):
     client = await _get_redis()
     if client:
         try:
@@ -81,7 +79,9 @@ async def _invalidate_stats_cache(widget_id: str | None = None, tenant_id: str |
 _CACHE_TTL = 300
 
 
-def _audit_log(outcome: str, widget_id: str, ip: str, extra: dict | None = None) -> None:
+def _audit_log(
+    outcome: str, widget_id: str, ip: str, extra: dict | None = None
+) -> None:
     entry = {"outcome": outcome, "widget_id": widget_id, "ip": ip}
     if extra:
         entry.update(extra)
@@ -97,6 +97,10 @@ async def submit_lead(
     ip = request.client.host if request.client else "unknown"
 
     # Step 4: Widget exists & active check
+    # NOTE: Public submit endpoint uses embed_service (no tenant check) because
+    # there is no auth. Tenant isolation is enforced downstream by reading
+    # tenant_id from the widget record. Authenticated endpoints use
+    # widget_service.get_widget(widget_id, tenant_id) for tenant verification.
     config = await embed_service.get_widget_config(widget_id)
     if config is None:
         _audit_log("widget_not_found", widget_id, ip)
@@ -146,10 +150,15 @@ async def submit_lead(
     if existing_lead_id is not None:
         existing = await repo.get_by_id(existing_lead_id)
         if existing is not None:
-            _audit_log("fingerprint_dedup", widget_id, ip, {
-                "fingerprint": fingerprint,
-                "existing_lead_id": str(existing.id),
-            })
+            _audit_log(
+                "fingerprint_dedup",
+                widget_id,
+                ip,
+                {
+                    "fingerprint": fingerprint,
+                    "existing_lead_id": str(existing.id),
+                },
+            )
             return existing, True
 
     # Step 9: Spam pre-check (skipped if honeypot already set)
@@ -189,22 +198,37 @@ async def submit_lead(
             pass
 
     if honeypot_triggered:
-        _audit_log("honeypot", widget_id, ip, {
-            "fingerprint": fingerprint,
-            "lead_id": str(lead.id),
-        })
+        _audit_log(
+            "honeypot",
+            widget_id,
+            ip,
+            {
+                "fingerprint": fingerprint,
+                "lead_id": str(lead.id),
+            },
+        )
     elif spam_score >= 0.5:
-        _audit_log("spam_flagged", widget_id, ip, {
-            "fingerprint": fingerprint,
-            "lead_id": str(lead.id),
-            "spam_score": spam_score,
-            "spam_reasons": spam_reasons,
-        })
+        _audit_log(
+            "spam_flagged",
+            widget_id,
+            ip,
+            {
+                "fingerprint": fingerprint,
+                "lead_id": str(lead.id),
+                "spam_score": spam_score,
+                "spam_reasons": spam_reasons,
+            },
+        )
     else:
-        _audit_log("success", widget_id, ip, {
-            "fingerprint": fingerprint,
-            "lead_id": str(lead.id),
-        })
+        _audit_log(
+            "success",
+            widget_id,
+            ip,
+            {
+                "fingerprint": fingerprint,
+                "lead_id": str(lead.id),
+            },
+        )
 
     return lead, False
 
@@ -294,6 +318,7 @@ async def get_widget_stats(
     if client and not skip_cache:
         try:
             import json
+
             cached = await client.get(cache_key)
             if cached:
                 return json.loads(cached)
@@ -308,15 +333,14 @@ async def get_widget_stats(
     return stats
 
 
-async def get_tenant_stats(
-    tenant_id: str, skip_cache: bool = False
-) -> dict:
+async def get_tenant_stats(tenant_id: str, skip_cache: bool = False) -> dict:
     client = await _get_redis()
     cache_key = f"stats:tenant:{tenant_id}"
 
     if client and not skip_cache:
         try:
             import json
+
             cached = await client.get(cache_key)
             if cached:
                 return json.loads(cached)
@@ -349,10 +373,25 @@ async def export_csv(
     writer = csv.writer(output)
 
     fields = [
-        "id", "widget_id", "tenant_id", "form_data", "ip_address",
-        "user_agent", "referer", "fingerprint", "geo_country", "geo_city",
-        "geo_region", "geo_isp", "geo_provider", "spam_score",
-        "spam_reasons", "honeypot_triggered", "status", "created_at", "updated_at",
+        "id",
+        "widget_id",
+        "tenant_id",
+        "form_data",
+        "ip_address",
+        "user_agent",
+        "referer",
+        "fingerprint",
+        "geo_country",
+        "geo_city",
+        "geo_region",
+        "geo_isp",
+        "geo_provider",
+        "spam_score",
+        "spam_reasons",
+        "honeypot_triggered",
+        "status",
+        "created_at",
+        "updated_at",
     ]
     writer.writerow(fields)
 
@@ -362,6 +401,7 @@ async def export_csv(
             val = lead.get(f)
             if isinstance(val, dict) or isinstance(val, list):
                 import json
+
                 val = json.dumps(val)
             elif val is None:
                 val = ""
@@ -383,9 +423,32 @@ async def delete_lead(lead_id: str, widget_id: str, tenant_id: str) -> bool:
     return result
 
 
-async def batch_delete_leads(lead_ids: list[str], widget_id: str, tenant_id: str) -> int:
+async def batch_delete_leads(
+    lead_ids: list[str], widget_id: str, tenant_id: str
+) -> int:
     repo = _get_or_create_repo()
     count = await repo.batch_delete(lead_ids, widget_id, tenant_id)
     if count > 0:
         await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
     return count
+
+
+async def re_enrich_lead(lead_id: str, widget_id: str, tenant_id: str) -> dict:
+    from app.core.queue import create_enrichment_job
+
+    repo = _get_or_create_repo()
+    lead = await repo.get_by_id(lead_id)
+    if lead is None or str(lead.widget_id) != widget_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found",
+        )
+
+    if lead.status in ("enriched", "pending"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Lead status is '{lead.status}', can only re-enrich 'failed' leads",
+        )
+
+    create_enrichment_job(lead_id)
+    return {"status": "re-enqueued", "lead_id": lead_id}

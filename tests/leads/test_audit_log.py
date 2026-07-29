@@ -1,7 +1,6 @@
 import io
 import json
 import logging
-import re
 
 import pytest
 
@@ -11,7 +10,9 @@ pytestmark = pytest.mark.usefixtures("mock_redis")
 
 
 class FakeRequest:
-    def __init__(self, ip="127.0.0.1", origin="https://myshop.com", ua="test-agent", referer=""):
+    def __init__(
+        self, ip="127.0.0.1", origin="https://myshop.com", ua="test-agent", referer=""
+    ):
         self.client = type("obj", (object,), {"host": ip})()
         self.headers = {
             "origin": origin,
@@ -39,7 +40,11 @@ def audit_capture():
 
 
 def _parse_log_entries(stream: io.StringIO) -> list[dict]:
-    return [json.loads(line) for line in stream.getvalue().strip().splitlines() if line.strip()]
+    return [
+        json.loads(line)
+        for line in stream.getvalue().strip().splitlines()
+        if line.strip()
+    ]
 
 
 class TestAuditLogging:
@@ -70,11 +75,13 @@ class TestAuditLogging:
         raw = await widget_service._get_repo().get_by_id_raw(widget_id)
         honeypot_field = raw["config"].get("honeypot_field", "_hp_a3f9")
 
-        body = LeadSubmit(form_data={
-            "name": "Bot",
-            "email": "bot@spam.com",
-            honeypot_field: "filled by bot",
-        })
+        body = LeadSubmit(
+            form_data={
+                "name": "Bot",
+                "email": "bot@spam.com",
+                honeypot_field: "filled by bot",
+            }
+        )
         request = FakeRequest()
         lead, _ = await submit_lead(widget_id, body, request)
 
@@ -85,7 +92,9 @@ class TestAuditLogging:
         assert entry["lead_id"] == str(lead.id)
 
     @pytest.mark.asyncio
-    async def test_fingerprint_dedup_outcome_logged(self, created_widget, audit_capture):
+    async def test_fingerprint_dedup_outcome_logged(
+        self, created_widget, audit_capture
+    ):
         from app.services.lead_service import submit_lead
 
         body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
@@ -102,14 +111,19 @@ class TestAuditLogging:
         assert entry["existing_lead_id"] == str(lead1.id)
 
     @pytest.mark.asyncio
-    async def test_rate_limited_outcome_logged(self, created_widget, audit_capture, monkeypatch):
-        from app.services.lead_service import submit_lead
+    async def test_rate_limited_outcome_logged(
+        self, created_widget, audit_capture, monkeypatch
+    ):
         from fastapi import HTTPException
+
+        from app.services.lead_service import submit_lead
 
         async def always_blocked(*args, **kwargs):
             return 60
 
-        monkeypatch.setattr("app.services.lead_service.check_rate_limits", always_blocked)
+        monkeypatch.setattr(
+            "app.services.lead_service.check_rate_limits", always_blocked
+        )
 
         body = LeadSubmit(form_data={"name": "John"})
         request = FakeRequest()
@@ -125,8 +139,9 @@ class TestAuditLogging:
 
     @pytest.mark.asyncio
     async def test_origin_rejected_outcome_logged(self, created_widget, audit_capture):
-        from app.services.lead_service import submit_lead
         from fastapi import HTTPException
+
+        from app.services.lead_service import submit_lead
 
         body = LeadSubmit(form_data={"name": "John"})
         request = FakeRequest(origin="https://evil.com")
@@ -144,11 +159,13 @@ class TestAuditLogging:
     async def test_spam_flagged_outcome_logged(self, created_widget, audit_capture):
         from app.services.lead_service import submit_lead
 
-        body = LeadSubmit(form_data={
-            "name": "John",
-            "email": "john@mailinator.com",
-            "message": "https://spam.com/buy-now",
-        })
+        body = LeadSubmit(
+            form_data={
+                "name": "John",
+                "email": "john@mailinator.com",
+                "message": "https://spam.com/buy-now",
+            }
+        )
         request = FakeRequest()
         lead, _ = await submit_lead(str(created_widget.id), body, request)
 

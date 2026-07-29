@@ -1,4 +1,3 @@
-import json
 from datetime import date
 from uuid import UUID
 
@@ -6,7 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 
 from app.dependencies.auth import get_current_user
-from app.models.lead import BatchDeleteRequest, LeadResponse, LeadSubmit, PaginatedLeadResponse
+from app.models.lead import (
+    BatchDeleteRequest,
+    LeadResponse,
+    LeadSubmit,
+    PaginatedLeadResponse,
+)
 from app.services import lead_service, widget_service
 
 router = APIRouter(prefix="/public/widget", tags=["public-leads"])
@@ -16,9 +20,7 @@ cross_router = APIRouter(prefix="/leads", tags=["leads"])
 
 @router.post("/{widget_id}/submit", status_code=status.HTTP_201_CREATED)
 async def submit_lead(widget_id: UUID, body: LeadSubmit, request: Request):
-    lead, _ = await lead_service.submit_lead(
-        str(widget_id), body, request
-    )
+    lead, _ = await lead_service.submit_lead(str(widget_id), body, request)
 
     return {
         "success": True,
@@ -293,22 +295,8 @@ async def re_enrich_lead(
             detail="Widget not found",
         )
 
-    repo = lead_service._get_or_create_repo()
-    lead = await repo.get_by_id(str(lead_id))
-    if lead is None or lead.widget_id != widget_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lead not found",
-        )
-
-    if lead.status in ("enriched", "pending"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Lead status is '{lead.status}', can only re-enrich 'failed' leads",
-        )
-
-    from app.core.queue import create_enrichment_job
-
-    create_enrichment_job(str(lead_id))
-
-    return {"status": "re-enqueued", "lead_id": str(lead_id)}
+    return await lead_service.re_enrich_lead(
+        lead_id=str(lead_id),
+        widget_id=str(widget_id),
+        tenant_id=tenant_id,
+    )

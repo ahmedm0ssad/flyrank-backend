@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import time
 from collections import defaultdict
@@ -41,31 +40,14 @@ def _check_in_process(ip: str, widget_id: str) -> int | None:
     ]
 
     for key, limit in keys_and_limits:
-        _in_process_limits[key] = [t for t in _in_process_limits[key] if now - t < window]
+        _in_process_limits[key] = [
+            t for t in _in_process_limits[key] if now - t < window
+        ]
         if len(_in_process_limits[key]) >= limit:
             return window
         _in_process_limits[key].append(now)
 
     return None
-
-
-async def _persist_rate_limit(ip: str, widget_id: str, tier_key: str, count: int) -> None:
-    try:
-        from app.core.database import get_pool, is_postgres_enabled
-
-        if not is_postgres_enabled():
-            return
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(
-                """
-                INSERT INTO rate_limits (ip_address, widget_id, scope, endpoint, window_start, count)
-                VALUES ($1::inet, $2::uuid, $3, 'submit', NOW(), $4)
-                """,
-                ip, widget_id, tier_key, count,
-            )
-    except Exception:
-        logger.debug("Failed to persist rate-limit decision (non-fatal): %s", exc_info=True)
 
 
 async def check_origin(request: Request, widget_id: UUID) -> None:

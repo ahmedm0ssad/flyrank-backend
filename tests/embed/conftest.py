@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 
 from app.models.widget import WidgetCreate
@@ -68,7 +66,9 @@ async def created_widget(sample_widget_data):
     from app.services import widget_service
 
     data = WidgetCreate(**sample_widget_data)
-    widget = await widget_service.create_widget(data, "11111111-1111-1111-1111-111111111111")
+    widget = await widget_service.create_widget(
+        data, "11111111-1111-1111-1111-111111111111"
+    )
     return widget
 
 

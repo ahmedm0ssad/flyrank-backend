@@ -188,9 +188,7 @@ class TestWidgetRepository:
             config=sample_widget["config"],
             tenant_id=tenant_id,
         )
-        items, total = await repo.list_by_tenant(
-            tenant_id=tenant_id, search="alpha"
-        )
+        items, total = await repo.list_by_tenant(tenant_id=tenant_id, search="alpha")
         assert total == 1
         assert items[0].name == "Alpha Widget"
 
@@ -209,9 +207,7 @@ class TestWidgetRepository:
         )
         await repo.soft_delete(str(created.id), tenant_id)
 
-        items, total = await repo.list_by_tenant(
-            tenant_id=tenant_id, active=True
-        )
+        items, total = await repo.list_by_tenant(tenant_id=tenant_id, active=True)
         assert total == 1
         assert items[0].name == "Inactive Widget"
 
@@ -254,10 +250,16 @@ class TestWidgetRepository:
         t1 = str(uuid.uuid4())
         t2 = str(uuid.uuid4())
         await repo.create(
-            name="T1 Widget", domain="https://t1.com", config=sample_widget["config"], tenant_id=t1
+            name="T1 Widget",
+            domain="https://t1.com",
+            config=sample_widget["config"],
+            tenant_id=t1,
         )
         await repo.create(
-            name="T2 Widget", domain="https://t2.com", config=sample_widget["config"], tenant_id=t2
+            name="T2 Widget",
+            domain="https://t2.com",
+            config=sample_widget["config"],
+            tenant_id=t2,
         )
         items_t1, total_t1 = await repo.list_by_tenant(tenant_id=t1)
         assert total_t1 == 1

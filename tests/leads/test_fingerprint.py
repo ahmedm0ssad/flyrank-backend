@@ -49,6 +49,7 @@ class TestFingerprint:
         await mark_seen(fp, "lead-123")
 
         from tests.conftest import _fake_redis
+
         _fake_redis._strings.pop(f"submission:fp:{fp}", None)
 
         result = await check_dedup(fp)
