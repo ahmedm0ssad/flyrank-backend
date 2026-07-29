@@ -207,7 +207,9 @@ async def submit_lead(
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, create_enrichment_job, str(lead.id))
         except Exception as exc:
-            logger.warning("Failed to enqueue enrichment job for lead %s: %s", lead.id, exc)
+            logger.warning(
+                "Failed to enqueue enrichment job for lead %s: %s", lead.id, exc
+            )
 
     if honeypot_triggered:
         _audit_log(
