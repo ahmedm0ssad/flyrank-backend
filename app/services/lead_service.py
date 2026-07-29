@@ -100,17 +100,26 @@ async def submit_lead(
     ip = request.client.host if request.client else "unknown"
 
     # Step 4: Widget exists & active check
-    # NOTE: Public submit endpoint uses embed_service (no tenant check) because
-    # there is no auth. Tenant isolation is enforced downstream by reading
-    # tenant_id from the widget record. Authenticated endpoints use
-    # widget_service.get_widget(widget_id, tenant_id) for tenant verification.
-    config = await embed_service.get_widget_config(widget_id)
-    if config is None:
+    # Single lookup for both existence/active check and tenant_id extraction.
+    # Embed service handles Redis caching internally.
+    raw = await embed_service.get_raw_widget(widget_id)
+    if raw is None or not raw.get("active", False):
         _audit_log("widget_not_found", widget_id, ip)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Widget not found",
         )
+
+    widget_config = raw.get("config", {})
+    config = {
+        "widget_id": widget_id,
+        "brand_color": widget_config.get("brand_color", "#2563eb"),
+        "button_text": widget_config.get("button_text", "Get a Quote"),
+        "fields": widget_config.get("fields", ["name", "email"]),
+        "success_message": widget_config.get("success_message", "Thanks!"),
+        "honeypot_field": widget_config.get("honeypot_field", "_hp_a3f9"),
+    }
+    tenant_id = raw.get("tenant_id", "unknown")
 
     # Step 5: Origin validation (reuses app/dependencies/embed.py)
     try:
@@ -169,9 +178,6 @@ async def submit_lead(
         spam_score, spam_reasons = score_submission(body.form_data)
 
     # Step 10: Insert lead
-    raw = await embed_service.get_raw_widget(widget_id)
-    tenant_id = raw["tenant_id"] if raw else "unknown"
-
     lead = await repo.create(
         widget_id=widget_id,
         tenant_id=tenant_id,
