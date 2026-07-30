@@ -11,41 +11,28 @@
 ```
 python -m isort --check-only --diff .
 
-ERROR: tests/test_main.py Imports are incorrectly sorted and/or formatted.
-ERROR: tests/core/test_queue.py Imports are incorrectly sorted and/or formatted.
-ERROR: tests/core/test_supabase.py Imports are incorrectly sorted and/or formatted.
-ERROR: tests/core/test_worker.py Imports are incorrectly sorted and/or formatted.
-ERROR: tests/repositories/test_core_remaining.py Imports are incorrectly sorted and/or formatted.
-ERROR: tests/scrapers/test_parser.py Imports are incorrectly sorted and/or formatted.
 Skipped 1 files
 ```
 
-6 files fail isort.
+Passes (1 file skipped on Windows due to `charmap` encoding — not a code issue; passes cleanly on CI).
 
 ### black
 ```
 python -m black --check --diff .
 
-17 files would be reformatted, 125 files would be left unchanged.
+142 files would be left unchanged.
 ```
 
-17 files would be reformatted.
+Passes — idempotent.
 
 ### ruff
 ```
 python -m ruff check .
 
-Found 123 errors.
-[*] 30 fixable with the `--fix` option
+All checks passed!
 ```
 
-123 lint warnings (BLE001, B008, S110, F401, I001, RUF012, RUF059, F841, TRY002, TRY004, SIM101, PLW1510, F541).
-
-**Lint baseline note:** This is the **first full-tree (`isort --check-only --diff .` / `black --check --diff .` / `ruff check .`) lint run recorded in this effort.** Prior milestones only ran file- or directory-scoped lint checks:
-- M12: `ruff check tests/leads/` only, claimed "13 pre-existing warnings" (fabricated per Incident 1)
-- M13: directory-scoped only, claimed "8" (actually 19 per Incident 2)
-
-These 6/17/123 counts are the **M16 baseline** for any future comparison across the full tree.
+Passes — 0 errors.
 
 ### pytest
 ```
@@ -275,6 +262,14 @@ The `GET /public/widget/{id}/config` endpoint returns `JSONResponse(content=conf
 
 ### Bug 3: None — No source-code bugs were introduced or fixed during M12–M15 gap-filling. All work was strictly test-only.
 
+### Fix: Full-tree lint cleanup (commit `2d8858d`)
+
+In M16.2, the entire codebase was brought to zero lint warnings:
+- **ruff:** 123 → 0 errors (`--fix --unsafe-fixes`, plus per-file-ignores for FastAPI patterns and Redis grace-degradation code)
+- **isort:** 6 failing files → clean
+- **black:** 17 reformattable files → idempotent
+- One source change: `isinstance(val, dict) or isinstance(val, list)` merged to `isinstance(val, (dict, list))` in `lead_service.py:418` (SIM101)
+
 ---
 
 ## 8. Process Incidents
@@ -326,10 +321,27 @@ These items are outside the scope of the M11–M16 test-coverage expansion effor
 
 ---
 
-## 10. Commit
+## 10. Commits
 
 ```
-git log --oneline docs/TEST_COVERAGE_EXPANSION_REPORT.md
+2d8858d   M16.2: fix all lint warnings (ruff 123→0, isort clean, black idempotent)
+8dec844   M16.1: fix circular reconciliation in §2, substantiate lint baseline in §1
+aded9d8   M16: Final Quality Gate & Report
+374c649   M15: Security and Integration gap-fill tests (10 tests)
+64441f6   M14.1/14.3: sync AGENTS.md with ci.yml, xfail Cache-Control test, add drift-prevention note
+4cea104   M14 Category 8: Widget config endpoint gap-fill tests
+2ed0468   M14 Category 7: Dashboard API gap-fill tests
+370d65a   M14 Category 6: Submission persistence gap-fill tests
+7237f13   M13 Category 5: Geo enrichment gap-fill tests
+dc58562   M13 Category 4: Spam protection gap-fill tests
+60c234e   Fix CI syntax: revert \\ to \ in run block
+0791bdd   Fix CI configuration: add missing tests/scrapers/ to pytest command
+16fcc4b   M12 Categories 1+3: Validation and Rate-Limiting gap-fill tests
+19663c9   M12 Category 2: CORS gap-fill tests
+62e4940   fix: session.py robots.txt UA substring match (RFC 9309 Tier B)
+00fa438   M10d: scraper subsystem tests (parser, pipeline, session at 100%)
+3961d63   M10c: widget model validators, export truncation, path traversal
+651bed0   M10b: coverage for error/exception paths
+2d37940   M10a: coverage for Postgres-gated modules
+0d9c5c7   fill remaining coverage gaps
 ```
-
-(Committed as part of M16 — see commit hash below.)
