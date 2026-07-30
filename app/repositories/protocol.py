@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from app.models.lead import LeadResponse
 from app.models.task import TaskCreate, TaskResponse, TaskUpdate
@@ -26,7 +26,8 @@ class TaskRepository(Protocol):
     async def get_stats(self) -> dict: ...
 
 
-class LeadRepository(Protocol):
+@runtime_checkable
+class LeadRepositoryProtocol(Protocol):
     async def create(
         self,
         widget_id: str,
@@ -100,7 +101,8 @@ class LeadRepository(Protocol):
     ) -> int: ...
 
 
-class WidgetRepository(Protocol):
+@runtime_checkable
+class WidgetRepositoryProtocol(Protocol):
     async def create(
         self,
         name: str,

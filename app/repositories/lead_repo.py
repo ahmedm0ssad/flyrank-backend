@@ -5,11 +5,12 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from app.models.lead import LeadResponse
+from app.repositories.protocol import LeadRepositoryProtocol
 
 _SEARCH_FIELDS = ["name", "email", "phone", "message", "company"]
 
 
-class LeadRepository:
+class LeadRepository(LeadRepositoryProtocol):
     def __init__(self):
         self._leads: dict[str, dict] = {}
 

@@ -4,9 +4,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.models.widget import WidgetResponse
+from app.repositories.protocol import WidgetRepositoryProtocol
 
 
-class WidgetRepository:
+class WidgetRepository(WidgetRepositoryProtocol):
     def __init__(self):
         self._widgets: dict[str, dict] = {}
         self._seed()

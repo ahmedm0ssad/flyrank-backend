@@ -4,9 +4,10 @@ from typing import Any
 
 from app.core.database import get_pool
 from app.models.widget import WidgetResponse
+from app.repositories.protocol import WidgetRepositoryProtocol
 
 
-class PostgresWidgetRepository:
+class PostgresWidgetRepository(WidgetRepositoryProtocol):
     @staticmethod
     def _row_to_response(row) -> WidgetResponse:
         return WidgetResponse(
