@@ -671,6 +671,71 @@ class TestGlobalStats:
         assert "total_leads" in data
 
 
+class TestSubmissionPersistence:
+    def test_created_at_updated_at_timestamps(self, client, created_widget):
+        import asyncio
+        from datetime import datetime, timezone
+
+        from app.services import lead_service, widget_service
+
+        widget_id = str(created_widget.id)
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            json={"form_data": {"name": "John", "email": "john@test.com"}},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 201
+        lead_id = resp.json()["lead_id"]
+
+        resp = client.get(f"/widgets/{widget_id}/leads/{lead_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        created_at = data["created_at"]
+        updated_at = data["updated_at"]
+
+        dt_created = datetime.fromisoformat(created_at)
+        dt_updated = datetime.fromisoformat(updated_at)
+        assert dt_created.tzinfo is not None
+        assert dt_updated.tzinfo is not None
+
+        raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
+        tenant_id = str(raw["tenant_id"])
+        repo = lead_service._get_or_create_repo()
+        asyncio.run(repo.update_status(lead_id, "enriched"))
+
+        resp = client.get(f"/widgets/{widget_id}/leads/{lead_id}")
+        data = resp.json()
+        assert data["created_at"] == created_at
+        updated_at2 = datetime.fromisoformat(data["updated_at"])
+        assert updated_at2 > dt_updated
+
+    def test_fingerprint_persisted_on_lead(self, client, created_widget):
+        import asyncio
+
+        from app.services import lead_service, widget_service
+        from app.services.fingerprint_service import compute_fingerprint
+
+        widget_id = str(created_widget.id)
+        form_data = {"name": "John", "email": "john@test.com"}
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            json={"form_data": form_data},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 201
+        lead_id = resp.json()["lead_id"]
+
+        raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
+        tenant_id = str(raw["tenant_id"])
+        repo = lead_service._get_or_create_repo()
+        lead = asyncio.run(repo.get_by_id(lead_id))
+        assert lead is not None
+
+        expected_fp = compute_fingerprint(widget_id, lead.ip_address, form_data)
+        assert lead.fingerprint == expected_fp
+
+
 class TestExportCSV:
     def test_200_csv_headers(self, client, created_widget):
         resp = client.get(f"/widgets/{created_widget.id}/export")
