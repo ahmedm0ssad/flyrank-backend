@@ -276,3 +276,57 @@ class TestPostgresWidgetRepository:
         assert str(response.id) == "00000000-0000-0000-0000-000000000001"
         assert response.name == "Test Widget"
         assert response.config == {"brand_color": "#2563eb"}
+
+    # ── Lines 81, 146, 170 ──────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_raw_config_as_string(self, repo, mock_pool):
+        """Line 81: config stored as JSON string, not dict."""
+        pool, conn = mock_pool
+        conn.fetchrow.return_value = _make_row(config='{"brand_color": "#2563eb"}')
+        with patch(
+            "app.repositories.postgres_widget_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            result = await repo.get_by_id_raw("00000000-0000-0000-0000-000000000001")
+            assert result is not None
+            assert result["config"] == {"brand_color": "#2563eb"}
+
+    @pytest.mark.asyncio
+    async def test_update_existing_config_as_string(self, repo, mock_pool):
+        """Line 146: existing config is a JSON string, parsed before merge."""
+        pool, conn = mock_pool
+        conn.fetchrow.side_effect = [
+            _make_row(config='{"brand_color": "#2563eb"}'),
+            _make_row(name="Updated"),
+        ]
+        with patch(
+            "app.repositories.postgres_widget_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            result = await repo.update(
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0000-000000000002",
+                config={"brand_color": "#ff0000"},
+            )
+            assert result is not None
+            assert result.name == "Updated"
+
+    @pytest.mark.asyncio
+    async def test_update_returns_none_when_update_returns_no_row(self, repo, mock_pool):
+        """Line 170: existing row found but UPDATE RETURNING returns None."""
+        pool, conn = mock_pool
+        conn.fetchrow.side_effect = [
+            _make_row(),
+            None,
+        ]
+        with patch(
+            "app.repositories.postgres_widget_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            result = await repo.update(
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0000-000000000002",
+                name="Updated",
+            )
+            assert result is None

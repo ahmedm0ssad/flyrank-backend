@@ -256,3 +256,94 @@ class TestReportRepositoryPostgres:
         repo = ReportRepository()
         result = await repo.update_report_status("nonexistent", ReportStatus.STARTED)
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_report_by_job_id_postgres_found(self, monkeypatch, _mock_pg_pool):
+        mock_conn = AsyncMock()
+        mock_row = {
+            "report_id": 1,
+            "job_id": "pg-job-found",
+            "status": "started",
+            "file_path": None,
+            "error": None,
+            "created_at": datetime.now(timezone.utc),
+            "started_at": datetime.now(timezone.utc),
+            "finished_at": None,
+        }
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+        mock_pool = _mock_pg_pool(mock_conn)
+
+        async def fake_get_pool():
+            return mock_pool
+
+        monkeypatch.setattr("app.repositories.report_repo.get_pool", fake_get_pool)
+
+        from app.repositories.report_repo import ReportRepository
+
+        repo = ReportRepository()
+        result = await repo.get_report_by_job_id("pg-job-found")
+        assert result is not None
+        assert result.job_id == "pg-job-found"
+        assert result.status == ReportStatus.STARTED
+
+    @pytest.mark.asyncio
+    async def test_update_report_status_postgres_finished_with_file(self, monkeypatch, _mock_pg_pool):
+        mock_conn = AsyncMock()
+        mock_row = {
+            "report_id": 1,
+            "job_id": "pg-job-fin",
+            "status": "finished",
+            "file_path": "/tmp/report.pdf",
+            "error": None,
+            "created_at": datetime.now(timezone.utc),
+            "started_at": datetime.now(timezone.utc),
+            "finished_at": datetime.now(timezone.utc),
+        }
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+        mock_pool = _mock_pg_pool(mock_conn)
+
+        async def fake_get_pool():
+            return mock_pool
+
+        monkeypatch.setattr("app.repositories.report_repo.get_pool", fake_get_pool)
+
+        from app.repositories.report_repo import ReportRepository
+
+        repo = ReportRepository()
+        result = await repo.update_report_status(
+            "pg-job-fin", ReportStatus.FINISHED, file_path="/tmp/report.pdf"
+        )
+        assert result is not None
+        assert result.status == ReportStatus.FINISHED
+        assert result.file_path == "/tmp/report.pdf"
+
+    @pytest.mark.asyncio
+    async def test_update_report_status_postgres_failed_with_error(self, monkeypatch, _mock_pg_pool):
+        mock_conn = AsyncMock()
+        mock_row = {
+            "report_id": 1,
+            "job_id": "pg-job-fail",
+            "status": "failed",
+            "file_path": None,
+            "error": "processing error",
+            "created_at": datetime.now(timezone.utc),
+            "started_at": None,
+            "finished_at": datetime.now(timezone.utc),
+        }
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+        mock_pool = _mock_pg_pool(mock_conn)
+
+        async def fake_get_pool():
+            return mock_pool
+
+        monkeypatch.setattr("app.repositories.report_repo.get_pool", fake_get_pool)
+
+        from app.repositories.report_repo import ReportRepository
+
+        repo = ReportRepository()
+        result = await repo.update_report_status(
+            "pg-job-fail", ReportStatus.FAILED, error="processing error"
+        )
+        assert result is not None
+        assert result.status == ReportStatus.FAILED
+        assert result.error == "processing error"
