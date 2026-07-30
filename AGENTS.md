@@ -19,6 +19,10 @@ isort --check-only --diff .
 black --check --diff .
 ruff check .
 
+# ⚠️ This command must be kept byte-for-byte identical to the pytest
+# invocation in .github/workflows/ci.yml. If they diverge, ci.yml is
+# authoritative — treat any difference as a bug and fix AGENTS.md, not
+# the other way around.
 # test (exact CI path — use this to match CI)
 python -m pytest \
   tests/embed/ \
@@ -28,6 +32,7 @@ python -m pytest \
   tests/models/ \
   tests/repositories/ \
   tests/routers/ \
+  tests/scrapers/ \
   tests/services/ \
   tests/test_main.py \
   tests/test_background_jobs.py \
