@@ -164,6 +164,103 @@ class TestSubmitLead:
         assert exc.value.status_code == 403
 
 
+class TestReEnrichLead:
+    @pytest.mark.asyncio
+    async def test_race_redis_key_blocks_despite_failed_status(self, created_widget):
+        from tests.conftest import _fake_redis
+        from app.core.queue import create_enrichment_job
+
+        widget_id = str(created_widget.id)
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(widget_id)
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        lead = await repo.create(
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+            form_data={"name": "John"},
+            ip_address="8.8.8.8",
+            fingerprint="fp-race",
+        )
+
+        create_enrichment_job(str(lead.id))
+        assert _fake_redis.get(f"enrichment:active:{lead.id}") is not None
+
+        with pytest.raises(HTTPException) as exc:
+            await lead_service.re_enrich_lead(
+                lead_id=str(lead.id),
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+            )
+        assert exc.value.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_202_with_no_active_key_and_failed_status(self, created_widget):
+        from app.core.queue import clear_enrichment_active
+
+        widget_id = str(created_widget.id)
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(widget_id)
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        lead = await repo.create(
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+            form_data={"name": "John"},
+            ip_address="8.8.8.8",
+            fingerprint="fp-happy",
+        )
+
+        await repo.update_status(str(lead.id), "failed")
+
+        result = await lead_service.re_enrich_lead(
+            lead_id=str(lead.id),
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+        )
+        assert result["status"] == "re-enqueued"
+        assert result["lead_id"] == str(lead.id)
+
+    @pytest.mark.asyncio
+    async def test_redis_key_cleared_worker_reenrich_succeeds(self, created_widget):
+        from tests.conftest import _fake_redis
+        from app.core.queue import create_enrichment_job, clear_enrichment_active
+
+        widget_id = str(created_widget.id)
+        from app.services import widget_service
+
+        raw = await widget_service._get_repo().get_by_id_raw(widget_id)
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        lead = await repo.create(
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+            form_data={"name": "Alice"},
+            ip_address="8.8.8.8",
+            fingerprint="fp-worker-clear",
+        )
+
+        create_enrichment_job(str(lead.id))
+        assert _fake_redis.get(f"enrichment:active:{lead.id}") is not None
+
+        clear_enrichment_active(str(lead.id))
+        assert _fake_redis.get(f"enrichment:active:{lead.id}") is None
+
+        await repo.update_status(str(lead.id), "failed")
+
+        result = await lead_service.re_enrich_lead(
+            lead_id=str(lead.id),
+            widget_id=widget_id,
+            tenant_id=tenant_id,
+        )
+        assert result["status"] == "re-enqueued"
+
+
 class TestDashboardService:
     @pytest.mark.asyncio
     async def test_get_leads(self, created_widget):

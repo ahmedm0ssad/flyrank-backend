@@ -419,6 +419,24 @@ class TestEnrichmentQueue:
         assert retry.intervals == [10, 60, 300]
         assert retry.intervals == [10, 60, 300]
 
+    def test_create_enrichment_job_stores_active_key(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_redis
+
+        lead_id = "lead-active-key"
+        job_id = queue_module.create_enrichment_job(lead_id)
+        stored = _fake_redis.get(f"enrichment:active:{lead_id}")
+        assert stored == job_id
+
+    def test_create_enrichment_job_active_key_has_correct_ttl(self, monkeypatch):
+        from app.core import queue as queue_module
+        from tests.conftest import _fake_redis
+
+        lead_id = "lead-ttl-check"
+        queue_module.create_enrichment_job(lead_id)
+        ttl = _fake_redis.ttl(f"enrichment:active:{lead_id}")
+        assert ttl == 600
+
 
 class TestFailureHandling:
     def test_job_failure_response_includes_status_and_error(

@@ -215,6 +215,8 @@ def create_enrichment_job(lead_id: str) -> str:
         meta={"max_retries": 3},
     )
 
+    conn.setex(f"enrichment:active:{lead_id}", 600, job_id)
+
     return job_id
 
 
@@ -243,3 +245,13 @@ def update_enrichment_job(job_id: str, status: str, **extra):
     mapping.update(extra)
     conn.hset(f"enrichment_job:{job_id}", mapping=mapping)
     conn.expire(f"enrichment_job:{job_id}", JOB_TTL)
+
+
+def get_enrichment_active(lead_id: str) -> str | None:
+    conn = get_connection()
+    return conn.get(f"enrichment:active:{lead_id}")
+
+
+def clear_enrichment_active(lead_id: str) -> None:
+    conn = get_connection()
+    conn.delete(f"enrichment:active:{lead_id}")

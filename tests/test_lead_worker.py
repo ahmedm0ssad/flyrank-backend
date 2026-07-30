@@ -447,3 +447,133 @@ class TestRunEnrichmentJob:
         assert len(lead_updates) == 1
         assert lead_updates[0]["status"] == "enriched"
         assert lead_updates[0]["geo_country"] == "US"
+
+    def test_clears_active_key_on_success(self, monkeypatch):
+        from tests.conftest import _fake_redis
+
+        mock_job = MagicMock()
+        mock_job.id = "test-enrich-clear-success"
+        mock_job.meta = {"max_retries": 3, "current_attempt": 0}
+        mock_job.retries_left = 0
+
+        monkeypatch.setattr(
+            "app.services.lead_worker.get_current_job", lambda: mock_job
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.update_enrichment_job", MagicMock()
+        )
+
+        fake_lead = MagicMock()
+        fake_lead.status = "pending"
+        fake_lead.ip_address = "8.8.8.8"
+
+        async def mock_get_by_id(self, lead_id):
+            return fake_lead
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.get_by_id",
+            mock_get_by_id,
+        )
+
+        async def mock_update_status(self, lead_id, status, **kw):
+            return fake_lead
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.update_status",
+            mock_update_status,
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.geo_enrich",
+            lambda ip: {
+                "country": "US",
+                "city": "Mountain View",
+                "region": "California",
+                "isp": "Google",
+                "provider": "ipapi",
+            },
+        )
+
+        _fake_redis.setex("enrichment:active:lead-1", 600, "some-job-id")
+
+        from app.services.lead_worker import run_enrichment_job
+
+        run_enrichment_job("lead-1")
+        assert _fake_redis.get("enrichment:active:lead-1") is None
+
+    def test_clears_active_key_on_final_failure(self, monkeypatch):
+        from tests.conftest import _fake_redis
+
+        mock_job = MagicMock()
+        mock_job.id = "test-enrich-clear-fail"
+        mock_job.meta = {"max_retries": 3, "current_attempt": 3}
+        mock_job.retries_left = 0
+        mock_job.save_meta = MagicMock()
+
+        monkeypatch.setattr(
+            "app.services.lead_worker.get_current_job", lambda: mock_job
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.update_enrichment_job", MagicMock()
+        )
+
+        fake_lead = MagicMock()
+        fake_lead.status = "pending"
+        fake_lead.ip_address = "8.8.8.8"
+
+        async def mock_get_by_id(self, lead_id):
+            return fake_lead
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.get_by_id",
+            mock_get_by_id,
+        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
+        monkeypatch.setattr("app.services.lead_worker.send_alert", MagicMock())
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
+
+        _fake_redis.setex("enrichment:active:lead-1", 600, "some-job-id")
+
+        from app.services.lead_worker import run_enrichment_job
+
+        with pytest.raises(RuntimeError):
+            run_enrichment_job("lead-1")
+        assert _fake_redis.get("enrichment:active:lead-1") is None
+
+    def test_keeps_active_key_on_intermediate_retry(self, monkeypatch):
+        from tests.conftest import _fake_redis
+
+        mock_job = MagicMock()
+        mock_job.id = "test-enrich-keep-key"
+        mock_job.meta = {"max_retries": 3, "current_attempt": 1}
+        mock_job.retries_left = 2
+        mock_job.save_meta = MagicMock()
+
+        monkeypatch.setattr(
+            "app.services.lead_worker.get_current_job", lambda: mock_job
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.update_enrichment_job", MagicMock()
+        )
+
+        fake_lead = MagicMock()
+        fake_lead.status = "pending"
+        fake_lead.ip_address = "8.8.8.8"
+
+        async def mock_get_by_id(self, lead_id):
+            return fake_lead
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.get_by_id",
+            mock_get_by_id,
+        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
+        monkeypatch.setattr("app.services.lead_worker.send_alert", MagicMock())
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
+
+        _fake_redis.setex("enrichment:active:lead-1", 600, "some-job-id")
+
+        from app.services.lead_worker import run_enrichment_job
+
+        with pytest.raises(RuntimeError):
+            run_enrichment_job("lead-1")
+        assert _fake_redis.get("enrichment:active:lead-1") == "some-job-id"

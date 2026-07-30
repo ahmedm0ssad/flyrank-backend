@@ -450,7 +450,7 @@ async def batch_delete_leads(
 
 
 async def re_enrich_lead(lead_id: str, widget_id: str, tenant_id: str) -> dict:
-    from app.core.queue import create_enrichment_job
+    from app.core.queue import create_enrichment_job, get_enrichment_active
 
     repo = _get_or_create_repo()
     lead = await repo.get_by_id(lead_id)
@@ -460,12 +460,21 @@ async def re_enrich_lead(lead_id: str, widget_id: str, tenant_id: str) -> dict:
             detail="Lead not found",
         )
 
+    loop = asyncio.get_event_loop()
+    active_job_id = await loop.run_in_executor(
+        None, get_enrichment_active, lead_id
+    )
+    if active_job_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Lead already has an active enrichment job ({active_job_id})",
+        )
+
     if lead.status in ("enriched", "pending"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Lead status is '{lead.status}', can only re-enrich 'failed' leads",
         )
 
-    loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, create_enrichment_job, lead_id)
     return {"status": "re-enqueued", "lead_id": lead_id}

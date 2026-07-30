@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 
 from rq import get_current_job
 
-from app.core.queue import update_enrichment_job
+from app.core.queue import (
+    clear_enrichment_active,
+    update_enrichment_job,
+)
 from app.models.job import JobStatus
 from app.repositories.lead_repo import LeadRepository
 from app.services.alert import send_alert
@@ -32,6 +35,7 @@ def run_enrichment_job(lead_id: str) -> str:
 
         if lead.status == "enriched":
             logger.info("Lead %s already enriched, skipping", lead_id)
+            clear_enrichment_active(lead_id)
             update_enrichment_job(
                 job_id,
                 JobStatus.FINISHED.value,
@@ -61,6 +65,7 @@ def run_enrichment_job(lead_id: str) -> str:
                 lead_id,
                 geo_data.get("provider"),
             )
+            clear_enrichment_active(lead_id)
             update_enrichment_job(
                 job_id,
                 JobStatus.FINISHED.value,
@@ -100,6 +105,7 @@ def run_enrichment_job(lead_id: str) -> str:
                 asyncio.run(repo.update_status(lead_id, "failed"))
             except Exception:
                 pass
+            clear_enrichment_active(lead_id)
             update_enrichment_job(
                 job_id,
                 JobStatus.FAILED.value,
