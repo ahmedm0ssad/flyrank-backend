@@ -694,15 +694,19 @@ class TestGlobalStats:
         repo = lead_service._get_or_create_repo()
         asyncio.run(
             repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": "Clean"}, ip_address="1.1.1.1",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "Clean"},
+                ip_address="1.1.1.1",
                 fingerprint="fp-clean",
             )
         )
         asyncio.run(
             repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": "Bot"}, ip_address="2.2.2.2",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "Bot"},
+                ip_address="2.2.2.2",
                 fingerprint="fp-bot",
                 honeypot_triggered=True,
             )
@@ -731,8 +735,10 @@ class TestLeadFilters:
 
         lead1 = asyncio.run(
             repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": "Alpha"}, ip_address="1.1.1.1",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "Alpha"},
+                ip_address="1.1.1.1",
                 fingerprint="fp-1",
             )
         )
@@ -740,8 +746,10 @@ class TestLeadFilters:
 
         lead2 = asyncio.run(
             repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": "Beta"}, ip_address="2.2.2.2",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "Beta"},
+                ip_address="2.2.2.2",
                 fingerprint="fp-2",
             )
         )
@@ -772,16 +780,20 @@ class TestLeadFilters:
 
         asyncio.run(
             repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": "Old"}, ip_address="1.1.1.1",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "Old"},
+                ip_address="1.1.1.1",
                 fingerprint="fp-old",
             )
         )
 
         asyncio.run(
             repo.create(
-                widget_id=widget_id, tenant_id=tenant_id,
-                form_data={"name": "Current"}, ip_address="2.2.2.2",
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "Current"},
+                ip_address="2.2.2.2",
                 fingerprint="fp-cur",
             )
         )
@@ -789,16 +801,14 @@ class TestLeadFilters:
         yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         resp = client.get(
-            f"/widgets/{widget_id}/leads"
-            f"?date_from={yesterday}&date_to={tomorrow}"
+            f"/widgets/{widget_id}/leads" f"?date_from={yesterday}&date_to={tomorrow}"
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 2
 
         resp = client.get(
-            f"/widgets/{widget_id}/leads"
-            f"?date_from=2020-01-01&date_to=2020-12-31"
+            f"/widgets/{widget_id}/leads" f"?date_from=2020-01-01&date_to=2020-12-31"
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -808,7 +818,7 @@ class TestLeadFilters:
 class TestSubmissionPersistence:
     def test_created_at_updated_at_timestamps(self, client, created_widget):
         import asyncio
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.services import lead_service, widget_service
 
@@ -834,7 +844,7 @@ class TestSubmissionPersistence:
         assert dt_updated.tzinfo is not None
 
         raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
-        tenant_id = str(raw["tenant_id"])
+        str(raw["tenant_id"])
         repo = lead_service._get_or_create_repo()
         asyncio.run(repo.update_status(lead_id, "enriched"))
 
@@ -861,7 +871,7 @@ class TestSubmissionPersistence:
         lead_id = resp.json()["lead_id"]
 
         raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
-        tenant_id = str(raw["tenant_id"])
+        str(raw["tenant_id"])
         repo = lead_service._get_or_create_repo()
         lead = asyncio.run(repo.get_by_id(lead_id))
         assert lead is not None

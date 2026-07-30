@@ -1,10 +1,6 @@
 import os
 
-from bs4 import Tag
-from bs4 import BeautifulSoup
-
 from app.scrapers.parser import (
-    RATING_MAP,
     extract_next_page_url,
     parse_detail_page,
     parse_listing_page,
@@ -202,15 +198,15 @@ class TestExtractNextPageUrl:
 class TestParseListingPageEdgeCases:
     def test_missing_h3_skips_article(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod"><div>No h3</div></article>'
             '<article class="product_pod">'
             '<h3><a href="catalogue/b/index.html" title="B">B</a></h3>'
             '<p class="price_color">£5.00</p>'
             '<p class="instock availability">In stock</p>'
             '<p class="star-rating One"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert len(results) == 1
@@ -218,51 +214,51 @@ class TestParseListingPageEdgeCases:
 
     def test_article_without_link_tag_skipped(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
-            '<h3>No anchor</h3>'
-            '</article>'
+            "<h3>No anchor</h3>"
+            "</article>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/b/index.html" title="B">B</a></h3>'
             '<p class="price_color">£5.00</p>'
             '<p class="instock availability">In stock</p>'
             '<p class="star-rating Two"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert len(results) == 1
 
     def test_empty_href_skipped(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
             '<h3><a href="" title="Empty href">Empty</a></h3>'
             '<p class="price_color">£5.00</p>'
             '<p class="instock availability">In stock</p>'
             '<p class="star-rating One"></p>'
-            '</article>'
+            "</article>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/b/index.html" title="B">B</a></h3>'
             '<p class="price_color">£5.00</p>'
             '<p class="instock availability">In stock</p>'
             '<p class="star-rating One"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert len(results) == 1
 
     def test_fallback_to_text_when_no_title(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/a/index.html">No Title Attr</a></h3>'
             '<p class="price_color">£10.00</p>'
             '<p class="instock availability">In stock</p>'
             '<p class="star-rating Four"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert len(results) == 1
@@ -270,52 +266,52 @@ class TestParseListingPageEdgeCases:
 
     def test_no_star_rating_tag_returns_empty(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/a/index.html" title="A">A</a></h3>'
             '<p class="price_color">£10.00</p>'
             '<p class="instock availability">In stock</p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert results[0]["rating_raw"] == ""
 
     def test_unmatched_rating_class_returns_empty(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/a/index.html" title="A">A</a></h3>'
             '<p class="price_color">£10.00</p>'
             '<p class="instock availability">In stock</p>'
             '<p class="star-rating Unknown"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert results[0]["rating_raw"] == ""
 
     def test_no_price_color_returns_empty(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/a/index.html" title="A">A</a></h3>'
             '<p class="star-rating Five"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert results[0]["price_raw"] == ""
 
     def test_no_availability_tag_returns_empty(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<article class="product_pod">'
             '<h3><a href="catalogue/a/index.html" title="A">A</a></h3>'
             '<p class="price_color">£10.00</p>'
             '<p class="star-rating Three"></p>'
-            '</article>'
-            '</body></html>'
+            "</article>"
+            "</body></html>"
         )
         results = parse_listing_page(html, "http://books.toscrape.com/")
         assert results[0]["availability_raw"] == ""
@@ -349,98 +345,93 @@ class TestParseListingPageEdgeCases:
 
 class TestParseDetailPageEdgeCases:
     def test_no_h1_returns_no_title(self):
-        html = '<html><body><p>No heading</p></body></html>'
+        html = "<html><body><p>No heading</p></body></html>"
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert "title" not in result
 
     def test_table_row_without_header_skipped(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<table class="table table-striped">'
-            '<tr><td>Only cells</td></tr>'
-            '<tr><th>UPC</th><td>abc123</td></tr>'
-            '</table>'
-            '</body></html>'
+            "<tr><td>Only cells</td></tr>"
+            "<tr><th>UPC</th><td>abc123</td></tr>"
+            "</table>"
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["upc"] == "abc123"
 
     def test_table_row_without_cells_skipped(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<table class="table table-striped">'
-            '<tr><th>Empty</th></tr>'
-            '<tr><th>UPC</th><td>abc123</td></tr>'
-            '</table>'
-            '</body></html>'
+            "<tr><th>Empty</th></tr>"
+            "<tr><th>UPC</th><td>abc123</td></tr>"
+            "</table>"
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["upc"] == "abc123"
 
     def test_no_product_description_div(self):
-        html = (
-            '<html><body>'
-            '<h1>Title</h1>'
-            '<p>Some text</p>'
-            '</body></html>'
-        )
+        html = "<html><body>" "<h1>Title</h1>" "<p>Some text</p>" "</body></html>"
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["description"] is None
 
     def test_description_div_without_sibling_p(self):
         html = (
-            '<html><body>'
-            '<h1>Title</h1>'
+            "<html><body>"
+            "<h1>Title</h1>"
             '<div id="product_description">Desc</div>'
-            '<div>Not a paragraph</div>'
-            '</body></html>'
+            "<div>Not a paragraph</div>"
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["description"] is None
 
     def test_breadcrumb_fewer_than_three_links(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<ul class="breadcrumb">'
             '<li><a href="#">Home</a></li>'
             '<li><a href="#">Books</a></li>'
-            '</ul>'
-            '</body></html>'
+            "</ul>"
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["category"] is None
 
     def test_no_breadcrumb(self):
-        html = '<html><body><h1>Title</h1></body></html>'
+        html = "<html><body><h1>Title</h1></body></html>"
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["category"] is None
 
     def test_no_item_active_div(self):
         html = (
-            '<html><body>'
-            '<h1>Title</h1>'
-            '<div>No item active here</div>'
-            '</body></html>'
+            "<html><body>"
+            "<h1>Title</h1>"
+            "<div>No item active here</div>"
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["image_url"] is None
 
     def test_item_active_without_img(self):
         html = (
-            '<html><body>'
-            '<h1>Title</h1>'
+            "<html><body>"
+            "<h1>Title</h1>"
             '<div class="item active"><p>No image here</p></div>'
-            '</body></html>'
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["image_url"] is None
 
     def test_item_active_img_without_src(self):
         html = (
-            '<html><body>'
-            '<h1>Title</h1>'
+            "<html><body>"
+            "<h1>Title</h1>"
             '<div class="item active"><img alt="no src"/></div>'
-            '</body></html>'
+            "</body></html>"
         )
         result = parse_detail_page(html, "http://books.toscrape.com/")
         assert result["image_url"] is None
@@ -448,7 +439,8 @@ class TestParseDetailPageEdgeCases:
     def test_parses_from_fixture_file(self):
         html = _read_fixture("detail_valid.html")
         result = parse_detail_page(
-            html, "http://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html"
+            html,
+            "http://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
         )
         assert result["title"] == "A Light in the Attic"
         assert result["upc"] == "a897fe39b8b8d634"
@@ -488,4 +480,3 @@ class TestExtractNextPageUrlEdgeCases:
         )
         assert result is not None
         assert "page-2" in result
-

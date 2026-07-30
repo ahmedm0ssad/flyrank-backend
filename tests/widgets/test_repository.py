@@ -261,7 +261,7 @@ class TestWidgetRepository:
             config=sample_widget["config"],
             tenant_id=t2,
         )
-        items_t1, total_t1 = await repo.list_by_tenant(tenant_id=t1)
+        _items_t1, total_t1 = await repo.list_by_tenant(tenant_id=t1)
         assert total_t1 == 1
-        items_t2, total_t2 = await repo.list_by_tenant(tenant_id=t2)
+        _items_t2, total_t2 = await repo.list_by_tenant(tenant_id=t2)
         assert total_t2 == 1

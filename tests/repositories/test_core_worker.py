@@ -6,7 +6,7 @@ worker.work) tested here with mocked redis and worker classes.
 Line 50 (if __name__ == "__main__") is a standard guard — not tested.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,7 +18,9 @@ class TestRunWorker:
         fake_conn = MagicMock()
         fake_worker = MagicMock()
         monkeypatch.setattr("redis.from_url", lambda url, **kw: fake_conn)
-        monkeypatch.setattr("app.core.worker.SimpleWorker", lambda q, connection: fake_worker)
+        monkeypatch.setattr(
+            "app.core.worker.SimpleWorker", lambda q, connection: fake_worker
+        )
 
         from app.core.worker import run_worker
 

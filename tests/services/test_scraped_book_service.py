@@ -50,7 +50,9 @@ class TestScrapedBookService:
         monkeypatch.setattr("app.services.scraped_book_service.pipeline", mock_pipeline)
 
         mock_repo = AsyncMock()
-        mock_repo.bulk_upsert = AsyncMock(return_value=[{"url": "http://example.com/b1"}])
+        mock_repo.bulk_upsert = AsyncMock(
+            return_value=[{"url": "http://example.com/b1"}]
+        )
         monkeypatch.setattr("app.services.scraped_book_service._repo", mock_repo)
 
         result = await sbs.start_scrape(max_pages=5)

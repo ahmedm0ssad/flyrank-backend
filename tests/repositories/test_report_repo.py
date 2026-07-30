@@ -197,7 +197,9 @@ class TestReportRepositoryPostgres:
         assert result.job_id == "pg-job-1"
 
     @pytest.mark.asyncio
-    async def test_update_report_status_postgres_started(self, monkeypatch, _mock_pg_pool):
+    async def test_update_report_status_postgres_started(
+        self, monkeypatch, _mock_pg_pool
+    ):
         mock_conn = AsyncMock()
         mock_row = {
             "report_id": 1,
@@ -224,7 +226,9 @@ class TestReportRepositoryPostgres:
         assert result.status == ReportStatus.STARTED
 
     @pytest.mark.asyncio
-    async def test_get_report_by_job_id_postgres_returns_none(self, monkeypatch, _mock_pg_pool):
+    async def test_get_report_by_job_id_postgres_returns_none(
+        self, monkeypatch, _mock_pg_pool
+    ):
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(return_value=None)
         mock_pool = _mock_pg_pool(mock_conn)
@@ -241,7 +245,9 @@ class TestReportRepositoryPostgres:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_update_report_status_postgres_nonexistent(self, monkeypatch, _mock_pg_pool):
+    async def test_update_report_status_postgres_nonexistent(
+        self, monkeypatch, _mock_pg_pool
+    ):
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(return_value=None)
         mock_pool = _mock_pg_pool(mock_conn)
@@ -258,7 +264,9 @@ class TestReportRepositoryPostgres:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_report_by_job_id_postgres_found(self, monkeypatch, _mock_pg_pool):
+    async def test_get_report_by_job_id_postgres_found(
+        self, monkeypatch, _mock_pg_pool
+    ):
         mock_conn = AsyncMock()
         mock_row = {
             "report_id": 1,
@@ -287,7 +295,9 @@ class TestReportRepositoryPostgres:
         assert result.status == ReportStatus.STARTED
 
     @pytest.mark.asyncio
-    async def test_update_report_status_postgres_finished_with_file(self, monkeypatch, _mock_pg_pool):
+    async def test_update_report_status_postgres_finished_with_file(
+        self, monkeypatch, _mock_pg_pool
+    ):
         mock_conn = AsyncMock()
         mock_row = {
             "report_id": 1,
@@ -318,7 +328,9 @@ class TestReportRepositoryPostgres:
         assert result.file_path == "/tmp/report.pdf"
 
     @pytest.mark.asyncio
-    async def test_update_report_status_postgres_failed_with_error(self, monkeypatch, _mock_pg_pool):
+    async def test_update_report_status_postgres_failed_with_error(
+        self, monkeypatch, _mock_pg_pool
+    ):
         mock_conn = AsyncMock()
         mock_row = {
             "report_id": 1,

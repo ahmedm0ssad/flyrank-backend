@@ -22,15 +22,21 @@ class TestModuleInit:
 
         project_root = os.getcwd()
         monkeypatch.chdir(tmp_path)
-        env = {k: v for k, v in os.environ.items()
-               if k not in ("SUPABASE_URL", "SUPABASE_KEY")}
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("SUPABASE_URL", "SUPABASE_KEY")
+        }
         env["PYTHONPATH"] = project_root
         result = subprocess.run(
             [
-                sys.executable, "-c",
+                sys.executable,
+                "-c",
                 "import app.core.supabase",
             ],
-            capture_output=True, text=True, env=env,
+            capture_output=True,
+            text=True,
+            env=env,
             cwd=str(tmp_path),
         )
         assert result.returncode == 1

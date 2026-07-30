@@ -314,7 +314,6 @@ class TestRobotsCheckerFixtures:
         assert checker._disallowed_paths == ["/api", "/secret"]
         assert checker._crawl_delay == 3.0
 
-
     def test_parse_with_multi_section_robots_fixture(self):
         checker = RobotsChecker("http://books.toscrape.com", "FlyRankBot/1.0")
         checker._parse(_read_fixture("robots_multi_section.txt"))

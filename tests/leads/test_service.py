@@ -71,7 +71,7 @@ class TestSubmitLead:
         )
         request = FakeRequest()
 
-        lead, was_dedup = await lead_service.submit_lead(widget_id, body, request)
+        lead, _was_dedup = await lead_service.submit_lead(widget_id, body, request)
         assert lead is not None
         assert lead.honeypot_triggered is False
         assert lead.spam_score >= 0.5
@@ -116,16 +116,14 @@ class TestSubmitLead:
         body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
         request = FakeRequest()
 
-        lead, was_dedup = await lead_service.submit_lead(widget_id, body, request)
+        lead, _was_dedup = await lead_service.submit_lead(widget_id, body, request)
         assert lead is not None
         fake_logger.warning.assert_called_once()
         exc_arg = fake_logger.warning.call_args[0][2]
         assert "enqueue failed" in str(exc_arg)
 
     @pytest.mark.asyncio
-    async def test_honeypot_skips_heuristic_scoring(
-        self, created_widget, monkeypatch
-    ):
+    async def test_honeypot_skips_heuristic_scoring(self, created_widget, monkeypatch):
         from app.services import widget_service
 
         def failing_score(form_data):
@@ -133,9 +131,7 @@ class TestSubmitLead:
                 "score_submission should not be called when honeypot triggered"
             )
 
-        monkeypatch.setattr(
-            "app.services.lead_service.score_submission", failing_score
-        )
+        monkeypatch.setattr("app.services.lead_service.score_submission", failing_score)
 
         widget_id = str(created_widget.id)
         raw = await widget_service._get_repo().get_by_id_raw(widget_id)
@@ -177,7 +173,7 @@ class TestDashboardService:
         raw = await widget_service._get_repo().get_by_id_raw(widget_id)
         tenant_id = str(raw["tenant_id"])
 
-        items, total = await lead_service.get_leads(
+        _items, total = await lead_service.get_leads(
             widget_id=widget_id,
             tenant_id=tenant_id,
         )
@@ -190,7 +186,7 @@ class TestDashboardService:
         raw = await widget_service._get_repo().get_by_id_raw(str(created_widget.id))
         tenant_id = str(raw["tenant_id"])
 
-        items, total = await lead_service.get_all_leads(tenant_id=tenant_id)
+        _items, total = await lead_service.get_all_leads(tenant_id=tenant_id)
         assert total == 0
 
     @pytest.mark.asyncio
@@ -215,7 +211,7 @@ class TestDashboardService:
         tenant_id = str(raw["tenant_id"])
         widget_id = str(created_widget.id)
 
-        repo = lead_service._get_or_create_repo()
+        lead_service._get_or_create_repo()
         body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
         request = FakeRequest()
         await lead_service.submit_lead(widget_id, body, request)

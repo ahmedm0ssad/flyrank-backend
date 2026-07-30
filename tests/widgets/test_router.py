@@ -236,7 +236,7 @@ class TestGetWidget:
         assert response.status_code == 404
 
     def test_get_widget_403_wrong_tenant(self, client, _mock_auth_and_service):
-        mock_service, mock_user = _mock_auth_and_service
+        mock_service, _mock_user = _mock_auth_and_service
         mock_service.get_widget.return_value = None
 
         response = client.get(f"/widgets/{uuid.uuid4()}")

@@ -101,7 +101,7 @@ class TestAuditLogging:
         request = FakeRequest()
 
         lead1, _ = await submit_lead(str(created_widget.id), body, request)
-        lead2, was_dedup = await submit_lead(str(created_widget.id), body, request)
+        _lead2, was_dedup = await submit_lead(str(created_widget.id), body, request)
         assert was_dedup is True
 
         entries = _parse_log_entries(audit_capture)

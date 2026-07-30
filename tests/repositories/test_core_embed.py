@@ -19,7 +19,9 @@ class TestNormalizeHost:
     def test_returns_hostname_on_unicode_error(self):
         from app.dependencies.embed import _normalize_host
 
-        result = _normalize_host("a" * 64)  # label > 63 chars triggers UnicodeEncodeError
+        result = _normalize_host(
+            "a" * 64
+        )  # label > 63 chars triggers UnicodeEncodeError
         assert result == "a" * 64
 
 

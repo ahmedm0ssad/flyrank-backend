@@ -1,10 +1,7 @@
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from app.models.job import JobStatus
 from app.core import queue
+from app.models.job import JobStatus
 
 
 class TestCreateJob:
@@ -16,7 +13,9 @@ class TestCreateJob:
         mock_queue = MagicMock()
         monkeypatch.setattr(queue, "get_queue", lambda: mock_queue)
 
-        job_id, status = queue.create_job({"prompt": "test"}, idempotency_key="idem-key")
+        job_id, status = queue.create_job(
+            {"prompt": "test"}, idempotency_key="idem-key"
+        )
 
         assert job_id is not None
         assert status == JobStatus.QUEUED
@@ -29,7 +28,9 @@ class TestCreateJob:
         mock_conn.get.return_value = "existing-job-id"
         monkeypatch.setattr(queue, "get_connection", lambda: mock_conn)
 
-        job_id, status = queue.create_job({"prompt": "test"}, idempotency_key="idem-key")
+        job_id, status = queue.create_job(
+            {"prompt": "test"}, idempotency_key="idem-key"
+        )
 
         assert job_id == "existing-job-id"
         assert status == JobStatus.QUEUED
@@ -132,7 +133,9 @@ class TestUpdateReportJob:
         mock_conn = MagicMock()
         monkeypatch.setattr(queue, "get_connection", lambda: mock_conn)
 
-        queue.update_report_job("report-job-id", JobStatus.FINISHED.value, result="report.pdf")
+        queue.update_report_job(
+            "report-job-id", JobStatus.FINISHED.value, result="report.pdf"
+        )
 
         mock_conn.hset.assert_called_once()
         mock_conn.expire.assert_called_once()
@@ -189,7 +192,9 @@ class TestUpdateEnrichmentJob:
         mock_conn = MagicMock()
         monkeypatch.setattr(queue, "get_connection", lambda: mock_conn)
 
-        queue.update_enrichment_job("enrich-job-id", JobStatus.FINISHED.value, result="enriched")
+        queue.update_enrichment_job(
+            "enrich-job-id", JobStatus.FINISHED.value, result="enriched"
+        )
 
         mock_conn.hset.assert_called_once()
         mock_conn.expire.assert_called_once()

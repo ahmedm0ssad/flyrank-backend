@@ -1,7 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
-import sys
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 class TestRunWorker:
@@ -32,7 +29,13 @@ class TestRunWorker:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         import redis
-        monkeypatch.setattr("redis.from_url", lambda *a, **kw: (_ for _ in ()).throw(redis.RedisError("Connection refused")))
+
+        monkeypatch.setattr(
+            "redis.from_url",
+            lambda *a, **kw: (_ for _ in ()).throw(
+                redis.RedisError("Connection refused")
+            ),
+        )
 
         from app.core.worker import run_worker
 

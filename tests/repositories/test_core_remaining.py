@@ -3,12 +3,11 @@ routes, and postgres_repo paths — placed in tests/repositories/ since
 that directory is in the CI path.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi import HTTPException
 import pytest
-
+from fastapi import HTTPException
 
 # ── app/routers/auth.py: lines 24, 33, 45, 56-59, 76 ────────────────
 
@@ -31,11 +30,27 @@ class TestAuthEmailExists:
     async def test_returns_false_on_http_error(self, monkeypatch):
         fake_response = MagicMock()
         fake_response.is_error = True
+
         async def mock_get(*a, **kw):
             return fake_response
-        monkeypatch.setattr("app.routers.auth.os.getenv", lambda key, default="": "https://test.supabase.co" if "URL" in key else "test-service-key")
-        monkeypatch.setattr("httpx.AsyncClient", MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock(get=mock_get)), __aexit__=AsyncMock(return_value=None))))
+
+        monkeypatch.setattr(
+            "app.routers.auth.os.getenv",
+            lambda key, default="": (
+                "https://test.supabase.co" if "URL" in key else "test-service-key"
+            ),
+        )
+        monkeypatch.setattr(
+            "httpx.AsyncClient",
+            MagicMock(
+                return_value=AsyncMock(
+                    __aenter__=AsyncMock(return_value=AsyncMock(get=mock_get)),
+                    __aexit__=AsyncMock(return_value=None),
+                )
+            ),
+        )
         from app.routers.auth import _email_exists
+
         result = await _email_exists("test@test.com")
         assert result is False
 
@@ -43,12 +58,30 @@ class TestAuthEmailExists:
     async def test_returns_true_when_users_found(self, monkeypatch):
         fake_response = MagicMock()
         fake_response.is_error = False
-        fake_response.json = MagicMock(return_value={"users": [{"email": "test@test.com"}]})
+        fake_response.json = MagicMock(
+            return_value={"users": [{"email": "test@test.com"}]}
+        )
+
         async def mock_get(*a, **kw):
             return fake_response
-        monkeypatch.setattr("app.routers.auth.os.getenv", lambda key, default="": "https://test.supabase.co" if "URL" in key else "test-service-key")
-        monkeypatch.setattr("httpx.AsyncClient", MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock(get=mock_get)), __exit__=AsyncMock(return_value=None))))
+
+        monkeypatch.setattr(
+            "app.routers.auth.os.getenv",
+            lambda key, default="": (
+                "https://test.supabase.co" if "URL" in key else "test-service-key"
+            ),
+        )
+        monkeypatch.setattr(
+            "httpx.AsyncClient",
+            MagicMock(
+                return_value=AsyncMock(
+                    __aenter__=AsyncMock(return_value=AsyncMock(get=mock_get)),
+                    __exit__=AsyncMock(return_value=None),
+                )
+            ),
+        )
         from app.routers.auth import _email_exists
+
         result = await _email_exists("test@test.com")
         assert result is True
 
@@ -56,9 +89,10 @@ class TestAuthEmailExists:
 class TestAuthSignup:
     @pytest.mark.asyncio
     async def test_signup_email_exists_raises_400(self, monkeypatch):
-        from app.routers.auth import _email_exists
 
-        monkeypatch.setattr("app.routers.auth._email_exists", AsyncMock(return_value=True))
+        monkeypatch.setattr(
+            "app.routers.auth._email_exists", AsyncMock(return_value=True)
+        )
         monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock())
 
         from app.models.auth import AuthSignup
@@ -72,12 +106,16 @@ class TestAuthSignup:
     async def test_signup_auth_api_error_raises_400(self, monkeypatch):
         from supabase import AuthApiError
 
-        monkeypatch.setattr("app.routers.auth._email_exists", AsyncMock(return_value=False))
+        monkeypatch.setattr(
+            "app.routers.auth._email_exists", AsyncMock(return_value=False)
+        )
         fake_supabase = AsyncMock()
         fake_supabase.auth.sign_up = AsyncMock(
             side_effect=AuthApiError("test error", 400, "bad_request")
         )
-        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+        monkeypatch.setattr(
+            "app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase)
+        )
 
         from app.models.auth import AuthSignup
         from app.routers.auth import signup
@@ -94,9 +132,13 @@ class TestAuthSignup:
 
         fake_supabase = AsyncMock()
         fake_supabase.auth.sign_in_with_password = AsyncMock(
-            side_effect=AuthApiError("Invalid login credentials", 401, "invalid_credentials")
+            side_effect=AuthApiError(
+                "Invalid login credentials", 401, "invalid_credentials"
+            )
         )
-        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+        monkeypatch.setattr(
+            "app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase)
+        )
 
         from app.models.auth import AuthLogin
         from app.routers.auth import login
@@ -113,7 +155,9 @@ class TestAuthSignup:
         fake_supabase.auth.sign_in_with_password = AsyncMock(
             side_effect=AuthApiError("Some other error", 400, "bad_request")
         )
-        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+        monkeypatch.setattr(
+            "app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase)
+        )
 
         from app.models.auth import AuthLogin
         from app.routers.auth import login
@@ -128,7 +172,9 @@ class TestAuthSignup:
         fake_supabase.auth.sign_in_with_password = AsyncMock(
             side_effect=HTTPException(status_code=400, detail="test http error")
         )
-        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+        monkeypatch.setattr(
+            "app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase)
+        )
 
         from app.models.auth import AuthLogin
         from app.routers.auth import login
@@ -307,11 +353,7 @@ class TestTaskServicePostgresBranch:
     def test_module_uses_postgres_repo_when_enabled(self, monkeypatch):
         import importlib
 
-        import app.core.database
-
-        monkeypatch.setattr(
-            "app.core.database.is_postgres_enabled", lambda: True
-        )
+        monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: True)
         import app.services.task_service as ts
 
         importlib.reload(ts)
@@ -467,9 +509,7 @@ class TestLeadRepoDateFilters:
             widget_id, tenant_id, date_from=past, date_to=future
         )
         assert len(results_future) == 1
-        results_past = await repo.get_export_data(
-            widget_id, tenant_id, date_to=past
-        )
+        results_past = await repo.get_export_data(widget_id, tenant_id, date_to=past)
         assert len(results_past) == 0
 
     @pytest.mark.asyncio
@@ -494,9 +534,7 @@ class TestLeadRepoDateFilters:
             widget_id, tenant_id, date_from=past, date_to=future
         )
         assert total == 1
-        items, total = await repo.list_by_widget(
-            widget_id, tenant_id, date_to=past
-        )
+        _items, total = await repo.list_by_widget(widget_id, tenant_id, date_to=past)
         assert total == 0
 
 
@@ -513,7 +551,8 @@ class TestWidgetRepoUpdateConfig:
         repo = WidgetRepository()
         tenant_id = str(uuid.uuid4())
         widget = await repo.create(
-            name="test", domain="https://example.com",
+            name="test",
+            domain="https://example.com",
             config={"brand_color": "#000", "fields": ["email"]},
             tenant_id=tenant_id,
         )
@@ -543,9 +582,7 @@ class TestLeadServiceExtra:
         assert result is injected
 
     @pytest.mark.asyncio
-    async def test_get_widget_stats_cache_parse_error_does_not_crash(
-        self, monkeypatch
-    ):
+    async def test_get_widget_stats_cache_parse_error_does_not_crash(self, monkeypatch):
         fake_redis = AsyncMock()
         fake_redis.get = AsyncMock(return_value="{invalid json}")
         monkeypatch.setattr(
@@ -557,9 +594,7 @@ class TestLeadServiceExtra:
         assert "total_leads" in stats
 
     @pytest.mark.asyncio
-    async def test_get_tenant_stats_cache_parse_error_does_not_crash(
-        self, monkeypatch
-    ):
+    async def test_get_tenant_stats_cache_parse_error_does_not_crash(self, monkeypatch):
         fake_redis = AsyncMock()
         fake_redis.get = AsyncMock(return_value="{invalid json}")
         monkeypatch.setattr(
@@ -640,7 +675,6 @@ class TestGeoServiceExceptions:
 
 class TestGetRedisFallback:
     def test_returns_none_when_get_redis_missing(self, monkeypatch):
-        import app.main
 
         monkeypatch.delattr("app.main.get_redis", raising=False)
         from app.dependencies.leads import _get_redis

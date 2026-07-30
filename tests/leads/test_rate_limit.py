@@ -141,7 +141,6 @@ class TestRateLimits:
     async def test_redis_down_redis_error_falls_to_in_process(
         self, monkeypatch, monkey_redis
     ):
-        original_pipeline = monkey_redis.pipeline
 
         class BrokenRedis:
             def pipeline(self):

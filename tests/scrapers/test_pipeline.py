@@ -150,7 +150,7 @@ class TestRunPipeline:
             mock_session.fetch.side_effect = fetch_side_effect
             mock_session_cls.return_value = mock_session
 
-            books, errors = run(max_pages=1)
+            _books, _errors = run(max_pages=1)
 
             mock_session_cls.assert_called_once()
             mock_session.close.assert_called_once()

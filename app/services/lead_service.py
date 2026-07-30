@@ -415,7 +415,7 @@ async def export_csv(
         row = []
         for f in fields:
             val = lead.get(f)
-            if isinstance(val, dict) or isinstance(val, list):
+            if isinstance(val, (dict, list)):
                 import json
 
                 val = json.dumps(val)

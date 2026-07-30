@@ -11,8 +11,6 @@ import importlib
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from tests.conftest import _fake_redis
 
 
@@ -46,7 +44,7 @@ class TestListJobs:
         _fake_redis._data.clear()
         now = datetime.now(timezone.utc).isoformat()
         _fake_redis.hset(
-            f"job:j1",
+            "job:j1",
             mapping={
                 "status": "queued",
                 "created_at": now,
@@ -64,7 +62,7 @@ class TestListJobs:
         _fake_redis._data.clear()
         now = datetime.now(timezone.utc).isoformat()
         _fake_redis.hset(
-            f"job:b1",
+            "job:b1",
             mapping={
                 "status": "queued",
                 "created_at": now,
@@ -89,6 +87,7 @@ class TestListJobs:
 class TestLazyInitSingletons:
     def test_get_connection_lazy_init(self, monkeypatch):
         import app.core.queue as qm
+
         importlib.reload(qm)
 
         fake_redis = MagicMock()
@@ -100,6 +99,7 @@ class TestLazyInitSingletons:
 
     def test_get_queue_lazy_init(self, monkeypatch):
         import app.core.queue as qm
+
         importlib.reload(qm)
 
         fake_redis = MagicMock()
@@ -115,6 +115,7 @@ class TestLazyInitSingletons:
 
     def test_get_report_queue_lazy_init(self, monkeypatch):
         import app.core.queue as qm
+
         importlib.reload(qm)
 
         fake_redis = MagicMock()
@@ -130,6 +131,7 @@ class TestLazyInitSingletons:
 
     def test_get_enrichment_queue_lazy_init(self, monkeypatch):
         import app.core.queue as qm
+
         importlib.reload(qm)
 
         fake_redis = MagicMock()

@@ -266,9 +266,7 @@ class TestEnrichmentFailureFlow:
         raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
         tenant_id = str(raw["tenant_id"])
 
-        lead = asyncio.run(
-            lead_service.get_lead_detail(lead_id, widget_id, tenant_id)
-        )
+        lead = asyncio.run(lead_service.get_lead_detail(lead_id, widget_id, tenant_id))
         assert lead is not None
         assert lead.status == "failed"
         assert lead.geo_country is None

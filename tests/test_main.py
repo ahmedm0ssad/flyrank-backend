@@ -22,21 +22,30 @@ class TestLifespan:
             asyncio.run(run_lifespan())
 
     def test_lifespan_supabase_configured(self, monkeypatch):
-        monkeypatch.setattr("app.main.get_client_credentials", lambda: ("https://test.supabase.co", "test-key"))
+        monkeypatch.setattr(
+            "app.main.get_client_credentials",
+            lambda: ("https://test.supabase.co", "test-key"),
+        )
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: False)
         monkeypatch.setenv("REDIS_URL", "")
 
-        from app.main import lifespan
         import asyncio
 
+        from app.main import lifespan
+
         app = MagicMock()
+
         async def run_lifespan():
             async with lifespan(app):
                 pass
+
         asyncio.run(run_lifespan())
 
     def test_lifespan_redis_connection_success(self, monkeypatch):
-        monkeypatch.setattr("app.main.get_client_credentials", lambda: ("https://test.supabase.co", "test-key"))
+        monkeypatch.setattr(
+            "app.main.get_client_credentials",
+            lambda: ("https://test.supabase.co", "test-key"),
+        )
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: False)
 
         fake_redis = AsyncMock()
@@ -46,13 +55,16 @@ class TestLifespan:
         monkeypatch.setattr("redis.asyncio.from_url", lambda *a, **kw: fake_redis)
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
-        from app.main import lifespan
         import asyncio
 
+        from app.main import lifespan
+
         app = MagicMock()
+
         async def run_lifespan():
             async with lifespan(app):
                 pass
+
         asyncio.run(run_lifespan())
 
         fake_redis.ping.assert_awaited_once()
@@ -60,7 +72,11 @@ class TestLifespan:
 
     def test_lifespan_redis_connection_failure(self, monkeypatch):
         import redis
-        monkeypatch.setattr("app.main.get_client_credentials", lambda: ("https://test.supabase.co", "test-key"))
+
+        monkeypatch.setattr(
+            "app.main.get_client_credentials",
+            lambda: ("https://test.supabase.co", "test-key"),
+        )
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: False)
 
         fake_redis = AsyncMock()
@@ -70,40 +86,54 @@ class TestLifespan:
         monkeypatch.setattr("redis.asyncio.from_url", lambda *a, **kw: fake_redis)
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
-        from app.main import lifespan
         import asyncio
 
+        from app.main import lifespan
+
         app = MagicMock()
+
         async def run_lifespan():
             async with lifespan(app):
                 pass
+
         asyncio.run(run_lifespan())
 
         fake_redis.ping.assert_awaited_once()
         fake_redis.close.assert_not_called()
 
     def test_lifespan_postgres_enabled(self, monkeypatch):
-        monkeypatch.setattr("app.main.get_client_credentials", lambda: ("https://test.supabase.co", "test-key"))
+        monkeypatch.setattr(
+            "app.main.get_client_credentials",
+            lambda: ("https://test.supabase.co", "test-key"),
+        )
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: True)
         monkeypatch.setenv("REDIS_URL", "")
 
         mock_pool = AsyncMock()
         mock_conn = AsyncMock()
         mock_conn.execute = AsyncMock()
-        
+
         async def mock_acquire():
             return mock_conn
-            
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock(return_value=None)))
+
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=None),
+            )
+        )
 
         with patch("app.main.get_pool", return_value=mock_pool):
-            from app.main import lifespan
             import asyncio
 
+            from app.main import lifespan
+
             app = MagicMock()
+
             async def run_lifespan():
                 async with lifespan(app):
                     pass
+
             asyncio.run(run_lifespan())
 
         mock_pool.acquire.assert_called_once()
@@ -152,14 +182,21 @@ class TestHealthEndpoint:
         assert data["redis"] == "connected"
 
     def test_health_with_postgres_connected(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.database.DATABASE_URL", "postgresql://test:test@localhost/test")
+        monkeypatch.setattr(
+            "app.core.database.DATABASE_URL", "postgresql://test:test@localhost/test"
+        )
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: True)
 
         mock_pool = AsyncMock()
         mock_conn = AsyncMock()
         mock_conn.execute = AsyncMock()
 
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock(return_value=None)))
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=None),
+            )
+        )
 
         async def mock_get_pool():
             return mock_pool
@@ -173,14 +210,21 @@ class TestHealthEndpoint:
         assert data["status"] == "ok"
 
     def test_health_with_postgres_unavailable(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.database.DATABASE_URL", "postgresql://test:test@localhost/test")
+        monkeypatch.setattr(
+            "app.core.database.DATABASE_URL", "postgresql://test:test@localhost/test"
+        )
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: True)
 
         mock_pool = AsyncMock()
         mock_conn = AsyncMock()
         mock_conn.execute = AsyncMock(side_effect=Exception("Connection failed"))
 
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock(return_value=None)))
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=None),
+            )
+        )
 
         async def mock_get_pool():
             return mock_pool

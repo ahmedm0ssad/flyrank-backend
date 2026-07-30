@@ -73,13 +73,13 @@ class TestLeadRepository:
         hp["fingerprint"] = "hp-fp"
         await repo.create(**hp)
 
-        items, total = await repo.list_by_widget(
+        _items, total = await repo.list_by_widget(
             widget_id=widget_id,
             tenant_id=sample_lead["tenant_id"],
         )
         assert total == 1
 
-        items2, total2 = await repo.list_by_widget(
+        _items2, total2 = await repo.list_by_widget(
             widget_id=widget_id,
             tenant_id=sample_lead["tenant_id"],
             include_honeypot=True,
@@ -169,7 +169,7 @@ class TestLeadRepository:
         new = dict(sample_lead, fingerprint="fp-new")
         await repo.create(**new)
 
-        items, total = await repo.list_by_widget(
+        _items, total = await repo.list_by_widget(
             widget_id=widget_id,
             tenant_id=tenant_id,
             date_from=date(2025, 1, 1),
@@ -198,7 +198,7 @@ class TestLeadRepository:
         other["tenant_id"] = str(uuid.uuid4())
         await repo.create(**other)
 
-        items, total = await repo.list_by_tenant(tenant_id=tenant_id)
+        _items, total = await repo.list_by_tenant(tenant_id=tenant_id)
         assert total == 1
 
     async def test_list_by_tenant_excludes_honeypot(self, repo, sample_lead, tenant_id):
@@ -206,10 +206,10 @@ class TestLeadRepository:
         hp = dict(sample_lead, fingerprint="hp-fp", honeypot_triggered=True)
         await repo.create(**hp)
 
-        items, total = await repo.list_by_tenant(tenant_id=tenant_id)
+        _items, total = await repo.list_by_tenant(tenant_id=tenant_id)
         assert total == 1
 
-        items2, total2 = await repo.list_by_tenant(
+        _items2, total2 = await repo.list_by_tenant(
             tenant_id=tenant_id, include_honeypot=True
         )
         assert total2 == 2
@@ -341,10 +341,10 @@ class TestLeadRepository:
         await repo.create(**ld1)
         await repo.create(**ld2)
 
-        items1, total1 = await repo.list_by_widget(widget_id=widget_id, tenant_id=t1)
+        _items1, total1 = await repo.list_by_widget(widget_id=widget_id, tenant_id=t1)
         assert total1 == 1
 
-        items2, total2 = await repo.list_by_widget(widget_id=widget_id, tenant_id=t2)
+        _items2, total2 = await repo.list_by_widget(widget_id=widget_id, tenant_id=t2)
         assert total2 == 1
 
     async def test_stats_avg_spam_score(self, repo, sample_lead, widget_id, tenant_id):

@@ -146,7 +146,7 @@ class TestPostgresWidgetRepository:
             "app.repositories.postgres_widget_repo.get_pool",
             AsyncMock(return_value=pool),
         ):
-            items, total = await repo.list_by_tenant(
+            _items, total = await repo.list_by_tenant(
                 "00000000-0000-0000-0000-000000000002",
                 search="Test",
                 page=1,
@@ -163,7 +163,7 @@ class TestPostgresWidgetRepository:
             "app.repositories.postgres_widget_repo.get_pool",
             AsyncMock(return_value=pool),
         ):
-            items, total = await repo.list_by_tenant(
+            _items, total = await repo.list_by_tenant(
                 "00000000-0000-0000-0000-000000000002",
                 active=True,
                 page=1,
@@ -313,7 +313,9 @@ class TestPostgresWidgetRepository:
             assert result.name == "Updated"
 
     @pytest.mark.asyncio
-    async def test_update_returns_none_when_update_returns_no_row(self, repo, mock_pool):
+    async def test_update_returns_none_when_update_returns_no_row(
+        self, repo, mock_pool
+    ):
         """Line 170: existing row found but UPDATE RETURNING returns None."""
         pool, conn = mock_pool
         conn.fetchrow.side_effect = [

@@ -249,7 +249,7 @@ class TestOriginValidationViaSubmit:
             }
 
         body = LeadSubmit(form_data={"name": "John"})
-        lead, was_dedup = await submit_lead(
+        lead, _was_dedup = await submit_lead(
             str(created_wildcard_widget.id), body, FakeRequest()
         )
         assert lead is not None
@@ -268,7 +268,7 @@ class TestOriginValidationViaSubmit:
             }
 
         body = LeadSubmit(form_data={"name": "John"})
-        lead, was_dedup = await submit_lead(
+        lead, _was_dedup = await submit_lead(
             str(created_wildcard_widget.id), body, FakeRequest()
         )
         assert lead is not None

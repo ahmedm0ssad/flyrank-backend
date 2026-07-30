@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.core.supabase import get_client_credentials, get_supabase
@@ -28,7 +29,9 @@ class TestGetSupabase:
         monkeypatch.setattr("app.core.supabase._key", "test-key")
 
         mock_client = AsyncMock()
-        with patch("app.core.supabase.create_async_client", return_value=mock_client) as mock_create:
+        with patch(
+            "app.core.supabase.create_async_client", return_value=mock_client
+        ) as mock_create:
             client = await get_supabase()
             assert client is mock_client
             mock_create.assert_awaited_once_with("https://test.supabase.co", "test-key")

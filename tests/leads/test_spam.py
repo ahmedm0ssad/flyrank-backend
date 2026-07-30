@@ -83,7 +83,7 @@ class TestSpamScoring:
         assert len(reasons) >= 2
 
     def test_threshold_logic_below(self):
-        score, reasons = score_submission(
+        score, _reasons = score_submission(
             {
                 "name": "John",
                 "email": "john@example.com",
@@ -93,7 +93,7 @@ class TestSpamScoring:
         assert score < 0.5
 
     def test_score_capped_at_one(self):
-        score, reasons = score_submission(
+        score, _reasons = score_submission(
             {
                 "name": "same",
                 "email": "same@mailinator.com",
@@ -106,7 +106,7 @@ class TestSpamScoring:
 
 class TestSpamEdgeCases:
     def test_non_string_values_in_form_data(self):
-        score, reasons = score_submission({"name": "John", "count": 42})
+        score, _reasons = score_submission({"name": "John", "count": 42})
         assert score == 0.0
 
     def test_zero_score_when_all_checks_empty(self):
