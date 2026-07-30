@@ -130,6 +130,17 @@ class TestListWidgets:
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
+    def test_list_widgets_tenant_isolation(self, client, _mock_auth_and_service):
+        mock_service, mock_user = _mock_auth_and_service
+        mock_service.get_widgets.return_value = ([], 0)
+
+        response = client.get("/widgets/")
+        assert response.status_code == 200
+
+        mock_service.get_widgets.assert_called_once()
+        call_kwargs = mock_service.get_widgets.call_args.kwargs
+        assert call_kwargs["tenant_id"] == str(mock_user["id"])
+
 
 class TestCreateWidget:
     def test_create_widget_returns_201(self, client, _mock_auth_and_service):
@@ -244,6 +255,10 @@ class TestGetWidget:
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
+    def test_get_widget_invalid_uuid(self, client, _mock_auth_and_service):
+        response = client.get("/widgets/abc")
+        assert response.status_code == 422
+
 
 class TestUpdateWidget:
     def test_update_widget_200(self, client, _mock_auth_and_service):
@@ -297,6 +312,10 @@ class TestUpdateWidget:
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
+    def test_update_widget_invalid_uuid(self, client, _mock_auth_and_service):
+        response = client.put("/widgets/abc", json={"name": "Test"})
+        assert response.status_code == 422
+
 
 class TestDeleteWidget:
     def test_delete_widget_204(self, client, _mock_auth_and_service):
@@ -326,3 +345,7 @@ class TestDeleteWidget:
             assert response.status_code == 401
         finally:
             app.dependency_overrides.pop(get_current_user, None)
+
+    def test_delete_widget_invalid_uuid(self, client, _mock_auth_and_service):
+        response = client.delete("/widgets/abc")
+        assert response.status_code == 422

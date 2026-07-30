@@ -387,6 +387,12 @@ class TestReEnrichLead:
         )
         assert resp.status_code == 404
 
+    def test_re_enrich_invalid_lead_id(self, client, created_widget):
+        resp = client.post(
+            f"/widgets/{created_widget.id}/leads/abc/re-enrich",
+        )
+        assert resp.status_code == 422
+
 
 class TestListWidgetLeads:
     def test_200_empty_list(self, client, created_widget):
@@ -606,6 +612,12 @@ class TestLeadDetail:
             "00000000-0000-0000-0000-000000000000"
         )
         assert resp.status_code == 404
+
+    def test_lead_detail_invalid_lead_id(self, client, created_widget):
+        resp = client.get(
+            f"/widgets/{created_widget.id}/leads/abc",
+        )
+        assert resp.status_code == 422
 
 
 class TestWidgetStats:
