@@ -95,10 +95,11 @@
 
 | File:Line | Description | Tier | Reasoning |
 |-----------|-------------|------|-----------|
-| `app/repositories/protocol.py` | `TaskRepository` protocol exists but `LeadRepository` and `WidgetRepository` don't implement it | C | Plan §1.1 mandates Repository Protocol pattern for all repos. `LeadRepository` and `WidgetRepository` are concrete classes without protocol conformance. Schema change risk if enforced. |
+| `app/repositories/protocol.py` | `TaskRepository` protocol exists but `LeadRepository` and `WidgetRepository` don't implement it | C | **FIXED in commit `c3a96e3`** — renamed to `LeadRepositoryProtocol`/`WidgetRepositoryProtocol` with `@runtime_checkable`. `LeadRepository`, `WidgetRepository`, and `PostgresWidgetRepository` now inherit from their respective protocols. 3 conformance tests added. |
 | `app/services/lead_service.py:25-43` | Global `_repo` and `_redis_client` singletons with lazy init | C | Hard to test, global state. Refactor to dependency injection would be a breaking internal change. |
 | `app/services/widget_service.py:36-41` | Global `_redis_client` singleton | C | Same as above. |
 | `app/dependencies/leads.py:31` | Global `_in_process_limits` dict for in-process rate limiting | C | Not thread-safe across workers; only works for single-process dev. Plan §14.4 says rate limiter fails open on Redis outage — this is the fallback, but global dict is process-local. |
+| `app/dependencies/leads.py:31` | `_in_process_limits` dict grows unbounded under sustained Redis outage — no eviction mechanism | C | **FIXED in commit `a7f9ed2`** — added `_MAX_IN_PROCESS_KEYS = 10_000` bound with LRU-oldest eviction using `OrderedDict`/`popitem(last=False)`. Recently accessed keys survive; the global reset risk of a full clear is avoided. 3 tests added (bounded dict, fresh-IP rate limiting after eviction, over-limit IP stays blocked after eviction). |
 | `app/main.py:81-87` | Wildcard CORS (`allow_origins=["*"]`) on entire app | C | **Intentional per plan §5.5, §8.1** — safe because `POST /submit` is gated by application-layer origin validation. **STATUS: CLOSED — accepted, confirmed correct, no further action.** |
 | `app/services/lead_service.py:126-138` | Honeypot-triggered leads are stored (not discarded) | C | **Intentional per plan §8.5** — stored with `honeypot_triggered=true`. **STATUS: CLOSED — accepted, confirmed correct, no further action.** |
 | `app/services/lead_service.py:144-153` | Fingerprint dedup window is 5 minutes (short) | C | **Intentional per plan §8.9** — anti-duplicate, not anti-abuse. **STATUS: CLOSED — accepted, confirmed correct, no further action.** |
@@ -119,7 +120,7 @@
 |------|-------|-----------|------------|
 | **A** (auto-fixable) | **38** | Unchanged | Unchanged |
 | **B** (confirmed bugs) | **7** | 3 fixed (M6), 2 fixed (M7: `b217a51`, `812fced`), 1 stale/clean, 3 re-tiered to C (#4, #7, #8) | #4 CLOSED — accepted as correct; #7, #8 DEFERRED |
-| **C** (flag only) | **19** | +3 from re-tiered M1 B items (#4, #7, #8) | **M17 disposition:** 6 CLOSED — accepted (§5.5/§8.5/§8.9/§9/§5.4 + tenant_id); 1 CLOSED — plan update (400→422); 4 REJECTED — Won't Fix (naming); 2 DEFERRED — dual-repo (trigger: third repo). **M18 (commit `d6fb7c3`):** re-enrich race condition → FIXED (option a: Redis `enrichment:active:{lead_id}` → `job_id` mapping with 600s TTL). **Remaining open: 3** (repository protocol conformance, global singletons, in-process rate-limit dict growth) |
+| **C** (flag only) | **19** | +3 from re-tiered M1 B items (#4, #7, #8); +1 new (unbounded fallback dict) | **M17 disposition:** 6 CLOSED — accepted (§5.5/§8.5/§8.9/§9/§5.4 + tenant_id); 1 CLOSED — plan update (400→422); 4 REJECTED — Won't Fix (naming); 2 DEFERRED — dual-repo (trigger: third repo). **M18 (commit `d6fb7c3`):** re-enrich race condition → FIXED. **M19 (commits `c3a96e3`, `a7f9ed2`):** repository protocol conformance → FIXED (`LeadRepositoryProtocol`/`WidgetRepositoryProtocol` + 3 conformance tests); unbounded fallback dict → FIXED (`OrderedDict` + LRU eviction, `_MAX_IN_PROCESS_KEYS` = 10 000, 3 tests). **Remaining open: 2** (global singletons `lead_service.py:25-43`/`widget_service.py:36-41`; process-local limits `leads.py:31`) |
 
 ---
 
