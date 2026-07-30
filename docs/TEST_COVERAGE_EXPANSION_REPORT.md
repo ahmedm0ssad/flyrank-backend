@@ -20,7 +20,7 @@ ERROR: tests/scrapers/test_parser.py Imports are incorrectly sorted and/or forma
 Skipped 1 files
 ```
 
-6 files fail isort. These are pre-existing in the codebase (not introduced by M12-M15). On Ubuntu CI the charmap issue does not occur and these would likely pass, or the auto-fix step is expected. **No change from prior milestones.**
+6 files fail isort.
 
 ### black
 ```
@@ -29,7 +29,7 @@ python -m black --check --diff .
 17 files would be reformatted, 125 files would be left unchanged.
 ```
 
-17 pre-existing formatting issues. All in test files that were part of the original codebase or M10a-d. **No change from prior milestones.**
+17 files would be reformatted.
 
 ### ruff
 ```
@@ -39,7 +39,13 @@ Found 123 errors.
 [*] 30 fixable with the `--fix` option
 ```
 
-123 pre-existing lint warnings across the codebase (BLE001, B008, S110, F401, RUF012, RUF059, F841, I001, TRY002, TRY004, SIM101, PLW1510, F541). All are in pre-existing code or files created before M12. **No change from prior milestones.**
+123 lint warnings (BLE001, B008, S110, F401, I001, RUF012, RUF059, F841, TRY002, TRY004, SIM101, PLW1510, F541).
+
+**Lint baseline note:** This is the **first full-tree (`isort --check-only --diff .` / `black --check --diff .` / `ruff check .`) lint run recorded in this effort.** Prior milestones only ran file- or directory-scoped lint checks:
+- M12: `ruff check tests/leads/` only, claimed "13 pre-existing warnings" (fabricated per Incident 1)
+- M13: directory-scoped only, claimed "8" (actually 19 per Incident 2)
+
+These 6/17/123 counts are the **M16 baseline** for any future comparison across the full tree.
 
 ### pytest
 ```
@@ -52,22 +58,42 @@ FAILED tests/test_db_schema.py::TestDBSchema::test_indexes_exist - Connection...
 
 ---
 
-## 2. Test-Count Reconciliation
+## 2. Test-Count Reconciliation (batch-by-batch from M4)
 
-| Layer | Count | Source |
-|-------|-------|--------|
-| M4 baseline | 605 | User-stated baseline |
-| + M10a-d coverage batches | 228 | 875 − 605 − 42 (milestone sum) = 228 |
-| + M12 (Validation, CORS, Rate Limiting) | 13 | Commits `19663c9`, `16fcc4b` |
-| + M13 (Spam, Geo) | 5 | Commits `dc58562`, `7237f13` |
-| + M14 (Persistence, Dashboard, Config) | 14 | Commits `370d65a`, `2ed0468`, `4cea104` |
-| + M15 (Security, Integration) | 10 | Commit `374c649` |
-| **Total** | **875** | |
-| **Passed** | **872** | |
-| **Failed** | **2** | Pre-existing Postgres ConnectionRefused (test_tables_exist, test_indexes_exist) |
-| **Xfailed** | **1** | `test_config_cache_control_header` (Tier C, awaiting sign-off) |
+All figures below are literal pytest output recorded at each milestone. The CI pytest command evolved: `tests/scrapers/` was absent before commit `0791bdd` (M12), so 78 pre-existing scraper tests were present in the repo at M10c but not collected.
 
-**Arithmetic check:** 605 + 228 + 13 + 5 + 14 + 10 = **875** ✓
+```
+M4  (baseline):         603 passed,  2 failed  =  605 collected  (m4-test-baseline.md:36)
+M10a (2d37940):         701 passed,  2 failed  =  703 collected  (m10-reconciliation.md:33)   Δ +98
+M10b (651bed0):         710 passed,  2 failed  =  712 collected  (m10-reconciliation.md:63)   Δ  +9
+M10c (3961d63):         714 passed,  2 failed  =  716 collected  (m10-reconciliation.md:97)   Δ  +4
+     │  ── 78 scraper tests exist but NOT collected (CI command lacks tests/scrapers/) ──
+     │  ── M10d (+25 parser + 7 session = 32 new scraper tests) ──
+     │  ── robots fix (+7 session = 7 more scraper tests) ──
+M10d baseline (projected): 831 passed,  2 failed  =  833 collected  (M12 report § "M10d baseline")
+     │  831 = 714 (M10c passed) + 117 (all scraper tests, now in CI command after 0791bdd)
+     │  117 = 78 pre-existing at M10c + 32 M10d + 7 robots fix
+M12 (19663c9+16fcc4b): 844 passed,  2 failed  =  846 collected  (m12-cli-fix-and-verification.md:78)  Δ +13
+M13 (dc58562+7237f13): 849 passed,  2 failed  =  851 collected  (m13-gap-fill.md:121)                 Δ  +5
+M14 (370d65a+2ed0468+4cea104): 862 passed,  2 failed,  1 xfailed  =  865 collected  (m14.1-resolve.md:60)  Δ +14
+M15 (374c649):         872 passed,  2 failed,  1 xfailed  =  875 collected  (fresh M16 run)            Δ +10
+```
+
+**Running total check:**
+```
+M4   603p +  2f =  605
+M10a 701p +  2f =  703  (+98 from M4)
+M10b 710p +  2f =  712  (+9)
+M10c 714p +  2f =  716  (+4)
+M10d 831p +  2f =  833  (+117: 78 pre-existing scraper tests previously uncollected +
+                              25 parser new in M10d + 7 session new in M10d + 7 session robots fix)
+M12  844p +  2f =  846  (+13 M12 tests)
+M13  849p +  2f =  851  (+5)
+M14  862p +  2f + 1x =  865  (+13 pass +1 xfail)
+M15  872p +  2f + 1x =  875  (+10)
+```
+
+**Discrepancy note:** The M10c→M10d jump of 117 is larger than the tests written in M10d+robots fix (39) because 78 pre-existing scraper tests were silently excluded from the CI command until commit `0791bdd` (M12 CI fix) added `tests/scrapers/`. The M12 report's "M10d baseline (831)" retroactively projects what the count would have been with scrapers in scope.
 
 ---
 
