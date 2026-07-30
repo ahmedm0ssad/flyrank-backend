@@ -152,3 +152,34 @@ class TestRateLimits:
         assert (
             retry_after is None
         ), "should fall back to in-process limiter on Redis error"
+
+
+class TestInProcessLimitBounding:
+    @pytest.mark.asyncio
+    async def test_fails_open_and_bounded(self, monkeypatch):
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
+        monkeypatch.setattr(
+            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
+        )
+
+        bound = 12
+        for i in range(bound * 3):
+            await check_rate_limits(f"ip-{i}", f"widget-{i % 4}")
+
+        assert len(_in_process_limits) <= bound
+
+    @pytest.mark.asyncio
+    async def test_single_ip_still_rate_limited_after_clear(self, monkeypatch):
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
+        monkeypatch.setattr(
+            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
+        )
+
+        for i in range(12 * 3):
+            await check_rate_limits(f"ip-{i}", "widget-1")
+
+        ip = "10.0.0.1"
+        limit = 100
+        for _ in range(limit + 1):
+            retry_after = await check_rate_limits(ip, "widget-1")
+        assert retry_after is not None

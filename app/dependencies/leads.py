@@ -28,6 +28,7 @@ def _get_redis():
 
 
 _in_process_limits: dict[str, list[float]] = defaultdict(list)
+_MAX_IN_PROCESS_KEYS = 10_000
 
 
 def _check_in_process(ip: str, widget_id: str) -> int | None:
@@ -46,6 +47,9 @@ def _check_in_process(ip: str, widget_id: str) -> int | None:
         if len(_in_process_limits[key]) >= limit:
             return window
         _in_process_limits[key].append(now)
+
+    if len(_in_process_limits) > _MAX_IN_PROCESS_KEYS:
+        _in_process_limits.clear()
 
     return None
 
