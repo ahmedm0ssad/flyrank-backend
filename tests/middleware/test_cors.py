@@ -158,6 +158,42 @@ class TestCorsHeaders:
         assert resp.status_code == 200
         assert resp.headers.get("access-control-allow-origin") == "*"
 
+    def test_cors_on_submit_success(self, client, created_widget):
+        widget_id = str(created_widget.id)
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            json={"form_data": {"name": "John"}},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 201
+        assert resp.headers.get("access-control-allow-origin") == "*"
+
+    def test_preflight_headers_include_allow_headers_and_max_age(self, client):
+        resp = client.options(
+            "/public/widget/00000000-0000-0000-0000-000000000000/config",
+            headers={
+                "Origin": "https://example.com",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("access-control-allow-origin") == "*"
+        allow_headers = resp.headers.get("access-control-allow-headers", "")
+        assert "Content-Type" in allow_headers
+        max_age = resp.headers.get("access-control-max-age", "")
+        assert max_age != ""
+        assert int(max_age) > 0
+
+    def test_preflight_with_disallowed_method_returns_400(self, client):
+        resp = client.options(
+            "/public/widget/00000000-0000-0000-0000-000000000000/config",
+            headers={
+                "Origin": "https://example.com",
+                "Access-Control-Request-Method": "PUT",
+            },
+        )
+        assert resp.status_code == 400
+
 
 @pytest.mark.usefixtures("mock_redis")
 class TestOriginValidationViaSubmit:
