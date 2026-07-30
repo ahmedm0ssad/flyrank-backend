@@ -6,6 +6,7 @@ that directory is in the CI path.
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import HTTPException
 import pytest
 
 
@@ -25,6 +26,76 @@ class TestAuthEmailExists:
 
         result = await _email_exists("test@test.com")
         assert result is False
+
+
+class TestAuthSignup:
+    @pytest.mark.asyncio
+    async def test_signup_email_exists_raises_400(self, monkeypatch):
+        from app.routers.auth import _email_exists
+
+        monkeypatch.setattr("app.routers.auth._email_exists", AsyncMock(return_value=True))
+        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock())
+
+        from app.models.auth import AuthSignup
+        from app.routers.auth import signup
+
+        with pytest.raises(HTTPException) as exc:
+            await signup(AuthSignup(email="test@test.com", password="test123"))
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_signup_auth_api_error_raises_400(self, monkeypatch):
+        from supabase import AuthApiError
+
+        monkeypatch.setattr("app.routers.auth._email_exists", AsyncMock(return_value=False))
+        fake_supabase = AsyncMock()
+        fake_supabase.auth.sign_up = AsyncMock(
+            side_effect=AuthApiError("test error", 400, "bad_request")
+        )
+        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+
+        from app.models.auth import AuthSignup
+        from app.routers.auth import signup
+
+        with pytest.raises(HTTPException) as exc:
+            await signup(AuthSignup(email="test@test.com", password="test123"))
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_login_auth_api_error_invalid_credentials_raises_401(
+        self, monkeypatch
+    ):
+        from supabase import AuthApiError
+
+        fake_supabase = AsyncMock()
+        fake_supabase.auth.sign_in_with_password = AsyncMock(
+            side_effect=AuthApiError("Invalid login credentials", 401, "invalid_credentials")
+        )
+        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+
+        from app.models.auth import AuthLogin
+        from app.routers.auth import login
+
+        with pytest.raises(HTTPException) as exc:
+            await login(AuthLogin(email="test@test.com", password="test123"))
+        assert exc.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_login_auth_api_error_generic_raises_400(self, monkeypatch):
+        from supabase import AuthApiError
+
+        fake_supabase = AsyncMock()
+        fake_supabase.auth.sign_in_with_password = AsyncMock(
+            side_effect=AuthApiError("Some other error", 400, "bad_request")
+        )
+        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+
+        from app.models.auth import AuthLogin
+        from app.routers.auth import login
+
+        with pytest.raises(HTTPException) as exc:
+            await login(AuthLogin(email="test@test.com", password="test123"))
+        assert exc.value.status_code == 400
 
 
 # ── app/routers/reports.py: lines 40, 47, 58 ────────────────────────
@@ -85,6 +156,73 @@ class TestReportServiceWorkerPaths:
         result = get_ai_jobs_stats()
         assert result is None
 
+    def test_get_scraped_books_stats_returns_empty_when_total_zero(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.chdir(tmp_path)
+        import sqlite3
+
+        conn = sqlite3.connect("tasks.db")
+        conn.execute("CREATE TABLE scraped_books (price REAL, category TEXT)")
+        conn.commit()
+        conn.close()
+        monkeypatch.setattr("os.path.exists", lambda p: True)
+        from app.services.report_service import get_scraped_books_stats
+
+        result = get_scraped_books_stats()
+        assert result == {"total": 0}
+
+    def test_get_scraped_books_stats_returns_full_stats_when_data_exists(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.chdir(tmp_path)
+        import sqlite3
+
+        conn = sqlite3.connect("tasks.db")
+        conn.execute("CREATE TABLE scraped_books (price REAL, category TEXT)")
+        conn.execute(
+            "INSERT INTO scraped_books (price, category) VALUES (10.5, 'Fiction')"
+        )
+        conn.execute(
+            "INSERT INTO scraped_books (price, category) VALUES (20.0, 'Non-Fiction')"
+        )
+        conn.commit()
+        conn.close()
+        monkeypatch.setattr("os.path.exists", lambda p: True)
+        from app.services.report_service import get_scraped_books_stats
+
+        result = get_scraped_books_stats()
+        assert result is not None
+        assert result["total"] == 2
+        assert result["avg_price"] == 15.25
+        assert result["categories"] == 2
+
+    def test_get_ai_jobs_stats_returns_none_when_no_jobs(self):
+        from app.services.report_service import get_ai_jobs_stats
+
+        result = get_ai_jobs_stats()
+        assert result is None
+
+    def test_get_ai_jobs_stats_returns_stats_when_jobs_exist(self, monkeypatch):
+        from tests.conftest import _fake_redis
+
+        _fake_redis.hset(
+            "job:j1",
+            mapping={"status": "finished", "created_at": "2025-01-01", "attempts": "0"},
+        )
+        _fake_redis.hset(
+            "job:j2",
+            mapping={"status": "failed", "created_at": "2025-01-02", "attempts": "0"},
+        )
+        _fake_redis.hset(
+            "job:j3",
+            mapping={"status": "queued", "created_at": "2025-01-03", "attempts": "0"},
+        )
+        from app.services.report_service import get_ai_jobs_stats
+
+        result = get_ai_jobs_stats()
+        assert result == {"total": 3, "completed": 1, "failed": 1}
+
 
 # ── app/services/ai_service.py: lines 20-26 (Groq real path) ────────
 
@@ -123,13 +261,25 @@ class TestAlert:
 
 
 # ── app/services/task_service.py: lines 6-8 ──────────────────────────
-# The module-level _repo is determined at import time by
-# is_postgres_enabled(). The autouse _no_postgres fixture patches it
-# before each test, so the Postgres branch never runs. Since the
-# import happens once per session (subsequent imports return the cached
-# module), importlib.reload cannot change the branch after the patched
-# name is overwritten by the re-import. Test removed with documented
-# skip reason.
+
+
+class TestTaskServicePostgresBranch:
+    def test_module_uses_postgres_repo_when_enabled(self, monkeypatch):
+        import importlib
+
+        import app.core.database
+
+        monkeypatch.setattr(
+            "app.core.database.is_postgres_enabled", lambda: True
+        )
+        import app.services.task_service as ts
+
+        importlib.reload(ts)
+        from app.repositories.postgres_repo import PostgresRepository
+
+        assert isinstance(ts._repo, PostgresRepository)
+
+        importlib.reload(ts)
 
 
 # ── app/middleware/body_limit.py: line 12 ─────────────────────────────
@@ -140,10 +290,25 @@ class TestBodyLimitMiddlewareEdge:
         resp = client.get("/health")
         assert resp.status_code == 200
 
-    # line 12 (large body rejection) skipped: it requires auth on POST
-    # endpoints and there is no unauthenticated POST route in the app.
-    # Testing via middleware-direct instantiation would be duplicating
-    # the production setup and is not worth the maintenance burden.
+    def test_non_http_scope_passthrough(self):
+        from app.middleware.body_limit import BodyLimitMiddleware
+
+        async def fake_app(scope, receive, send):
+            return "called"
+
+        middleware = BodyLimitMiddleware(fake_app)
+        import asyncio
+
+        result = asyncio.run(middleware({"type": "websocket"}, None, None))
+        assert result == "called"
+
+    def test_large_body_rejected_via_auth_signup(self, client):
+        resp = client.post(
+            "/auth/signup",
+            content=b"x" * 60_000,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 413
 
 
 # ── app/services/lead_worker.py: lines 31, 57, 101-102 ───────────────

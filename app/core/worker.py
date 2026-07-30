@@ -46,5 +46,5 @@ def run_worker():
     worker.work()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     run_worker()

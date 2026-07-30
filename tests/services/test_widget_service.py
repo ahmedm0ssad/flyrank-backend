@@ -52,3 +52,19 @@ class TestGetRepo:
     def test_returns_repo_instance(self):
         repo = widget_service._get_repo()
         assert repo is not None
+
+
+class TestWidgetServicePostgresBranch:
+    def test_module_uses_postgres_repo_when_enabled(self, monkeypatch):
+        import importlib
+
+        monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: True)
+        import app.services.widget_service as ws
+
+        importlib.reload(ws)
+        from app.repositories.postgres_widget_repo import PostgresWidgetRepository
+
+        assert isinstance(ws._repo, PostgresWidgetRepository)
+
+        monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: False)
+        importlib.reload(ws)

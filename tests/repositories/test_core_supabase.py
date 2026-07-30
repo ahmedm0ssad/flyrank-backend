@@ -1,9 +1,4 @@
-"""Tests for app.core.supabase.
-
-Lines 13-14 (sys.exit(1) when SUPABASE_URL/KEY missing) cannot be tested
-without killing the test runner — that path only fires at module import
-time when env vars are absent, and conftest.py always sets them.
-"""
+"""Tests for app.core.supabase."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -17,6 +12,29 @@ class TestGetClientCredentials:
         url, key = get_client_credentials()
         assert url == "https://test.supabase.co"
         assert key == "test-anon-key"
+
+
+class TestModuleInit:
+    def test_sys_exit_when_url_missing(self, tmp_path, monkeypatch):
+        import os
+        import subprocess
+        import sys
+
+        project_root = os.getcwd()
+        monkeypatch.chdir(tmp_path)
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("SUPABASE_URL", "SUPABASE_KEY")}
+        env["PYTHONPATH"] = project_root
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import app.core.supabase",
+            ],
+            capture_output=True, text=True, env=env,
+            cwd=str(tmp_path),
+        )
+        assert result.returncode == 1
+        assert "FATAL" in result.stdout
 
 
 class TestGetSupabase:

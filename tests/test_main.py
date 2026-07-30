@@ -1,9 +1,26 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 
 class TestLifespan:
+    def test_lifespan_missing_supabase_raises(self, monkeypatch):
+        import asyncio
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr("app.main.get_client_credentials", lambda: ("", ""))
+        from app.main import lifespan
+
+        app = MagicMock()
+
+        async def run_lifespan():
+            async with lifespan(app):
+                pass
+
+        with pytest.raises(RuntimeError, match="Missing Supabase credentials"):
+            asyncio.run(run_lifespan())
+
     def test_lifespan_supabase_configured(self, monkeypatch):
         monkeypatch.setattr("app.main.get_client_credentials", lambda: ("https://test.supabase.co", "test-key"))
         monkeypatch.setattr("app.main.is_postgres_enabled", lambda: False)

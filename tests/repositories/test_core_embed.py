@@ -16,15 +16,11 @@ class TestNormalizeHost:
 
         assert _normalize_host("") == ""
 
-    def test_returns_hostname_on_unicode_error(self, monkeypatch):
+    def test_returns_hostname_on_unicode_error(self):
         from app.dependencies.embed import _normalize_host
 
-        def broken_encode(*a, **kw):
-            raise UnicodeError("invalid")
-
-        monkeypatch.setattr("app.dependencies.embed._normalize_host", lambda h: h)
-        result = _normalize_host("example.com")
-        assert result == "example.com"
+        result = _normalize_host("a" * 64)  # label > 63 chars triggers UnicodeEncodeError
+        assert result == "a" * 64
 
 
 class TestParseOriginHost:

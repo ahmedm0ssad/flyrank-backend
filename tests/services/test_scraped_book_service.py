@@ -32,6 +32,35 @@ class TestScrapedBookService:
         assert result["books_saved"] == 0
         assert result["duration_seconds"] == 0
 
+    @pytest.mark.asyncio
+    async def test_start_scrape_postgres_enabled_path(self, monkeypatch):
+        import importlib
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: True)
+        import app.services.scraped_book_service as sbs
+
+        importlib.reload(sbs)
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.run.return_value = (
+            [{"url": "http://example.com/b1", "title": "Book 1"}],
+            [],
+        )
+        monkeypatch.setattr("app.services.scraped_book_service.pipeline", mock_pipeline)
+
+        mock_repo = AsyncMock()
+        mock_repo.bulk_upsert = AsyncMock(return_value=[{"url": "http://example.com/b1"}])
+        monkeypatch.setattr("app.services.scraped_book_service._repo", mock_repo)
+
+        result = await sbs.start_scrape(max_pages=5)
+        assert result["books_scraped"] == 1
+        assert result["books_saved"] == 1
+        assert result["errors"] == []
+
+        monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: False)
+        importlib.reload(sbs)
+
     def test_scraped_book_create_from_pipeline_data(self):
         data = {
             "url": "http://example.com/book1",
