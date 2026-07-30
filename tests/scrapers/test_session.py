@@ -110,6 +110,26 @@ class TestRobotsChecker:
         checker._parse("User-agent: *\nCrawl-delay: not_a_number")
         assert checker._crawl_delay == 0
 
+    def test_parse_no_false_positive_substring_bot(self):
+        checker = RobotsChecker("http://example.com", "FlyRankBot/1.0")
+        checker._parse("User-agent: Bot\nDisallow: /admin")
+        assert checker._disallowed_paths == []
+
+    def test_parse_no_false_positive_substring_rank(self):
+        checker = RobotsChecker("http://example.com", "FlyRankBot/1.0")
+        checker._parse("User-agent: Rank\nDisallow: /admin")
+        assert checker._disallowed_paths == []
+
+    def test_parse_true_positive_exact_match(self):
+        checker = RobotsChecker("http://example.com", "FlyRankBot/1.0")
+        checker._parse("User-agent: FlyRankBot\nDisallow: /api")
+        assert checker._disallowed_paths == ["/api"]
+
+    def test_parse_true_positive_prefix_match(self):
+        checker = RobotsChecker("http://example.com", "FlyRankBot/1.0")
+        checker._parse("User-agent: FlyRankBot/1.0\nDisallow: /data")
+        assert checker._disallowed_paths == ["/data"]
+
 
 class TestScrapeSession:
     def test_init_sets_default_delay(self):
@@ -293,6 +313,37 @@ class TestRobotsCheckerFixtures:
         )
         assert checker._disallowed_paths == ["/api", "/secret"]
         assert checker._crawl_delay == 3.0
+
+
+    def test_parse_with_multi_section_robots_fixture(self):
+        checker = RobotsChecker("http://books.toscrape.com", "FlyRankBot/1.0")
+        checker._parse(_read_fixture("robots_multi_section.txt"))
+        assert "/api" in checker._disallowed_paths
+        assert "/admin" in checker._disallowed_paths
+        assert checker._crawl_delay == 3.0
+
+    def test_load_with_multi_section_robots_fixture(self):
+        checker = RobotsChecker("http://books.toscrape.com", "FlyRankBot/1.0")
+        session = MagicMock()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = _read_fixture("robots_multi_section.txt")
+        session.get.return_value = resp
+
+        checker.load(session)
+        assert checker._loaded is True
+        assert "/api" in checker._disallowed_paths
+        assert "/admin" in checker._disallowed_paths
+        assert checker._crawl_delay == 3.0
+
+    def test_parse_blank_line_resets_relevance(self):
+        checker = RobotsChecker("http://example.com", "FlyRankBot/1.0")
+        checker._parse(
+            "User-agent: *\nDisallow: /first\n\nDisallow: /leaked\n\n"
+            "User-agent: OtherBot\nDisallow: /other"
+        )
+        assert checker._disallowed_paths == ["/first"]
+        assert checker._crawl_delay == 0.0
 
 
 class TestScrapeSessionFixtures:

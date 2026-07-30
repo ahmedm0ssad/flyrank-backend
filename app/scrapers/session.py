@@ -46,9 +46,13 @@ class RobotsChecker:
         relevant = False
         for line in text.splitlines():
             line = line.strip()
-            if line.lower().startswith("user-agent:"):
+            if not line:
+                relevant = False
+            elif line.lower().startswith("user-agent:"):
                 agent = line.split(":", 1)[1].strip()
-                relevant = agent == "*" or agent.lower() in self._user_agent.lower()
+                relevant = agent == "*" or self._user_agent.lower().startswith(
+                    agent.lower()
+                )
             elif relevant:
                 if line.lower().startswith("disallow:"):
                     path = line.split(":", 1)[1].strip()

@@ -1,0 +1,9 @@
+User-agent: SomeOtherBot
+Disallow: /secret-stuff
+
+User-agent: FlyRankBot
+Disallow: /api
+Crawl-delay: 3
+
+User-agent: *
+Disallow: /admin
