@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models.widget import WidgetUpdate
 from app.services import widget_service
 
 
@@ -52,6 +53,25 @@ class TestGetRepo:
     def test_returns_repo_instance(self):
         repo = widget_service._get_repo()
         assert repo is not None
+
+
+class TestUpdateWidget:
+    @pytest.mark.asyncio
+    async def test_returns_none_when_widget_not_found(self, monkeypatch):
+        async def mock_get_by_id_none(widget_id, tenant_id):
+            return None
+
+        monkeypatch.setattr(
+            "app.services.widget_service._repo.get_by_id",
+            mock_get_by_id_none,
+        )
+
+        result = await widget_service.update_widget(
+            "00000000-0000-0000-0000-000000000000",
+            "tenant-1",
+            WidgetUpdate(name="Updated"),
+        )
+        assert result is None
 
 
 class TestWidgetServicePostgresBranch:

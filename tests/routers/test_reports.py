@@ -76,6 +76,22 @@ class TestDownloadReport:
         response = client.get("/reports/files/valid_name_only.pdf")
         assert response.status_code == 404
 
+    def test_download_path_traversal_rejected_400(self, client: TestClient):
+        response = client.get("/reports/files/test..pdf")
+        assert response.status_code == 400
+
+    def test_download_successful_200(self, client: TestClient, tmp_path, monkeypatch):
+        reports_dir = tmp_path / "generated_reports"
+        reports_dir.mkdir()
+        pdf_file = reports_dir / "report_test.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4 fake pdf content")
+
+        monkeypatch.setattr("app.routers.reports.REPORTS_DIR", str(reports_dir))
+
+        response = client.get("/reports/files/report_test.pdf")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+
 
 class TestDownloadSecurityDirect:
     def test_filename_with_slash_rejected(self):

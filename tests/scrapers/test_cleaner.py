@@ -127,6 +127,50 @@ class TestCleanBook:
         result = clean_book(raw)
         assert result is None
 
+    def test_clean_book_null_description_returns_none(self):
+        result = clean_book(
+            {
+                "url": "http://example.com/b",
+                "title": "Book",
+                "description": "   ",
+            }
+        )
+        assert result is not None
+        assert result.description is None
+
+    def test_clean_book_null_category_returns_none(self):
+        result = clean_book(
+            {
+                "url": "http://example.com/b",
+                "title": "Book",
+                "category": "   ",
+            }
+        )
+        assert result is not None
+        assert result.category is None
+
+    def test_clean_book_null_upc_returns_none(self):
+        result = clean_book(
+            {
+                "url": "http://example.com/b",
+                "title": "Book",
+                "upc": "   ",
+            }
+        )
+        assert result is not None
+        assert result.upc is None
+
+    def test_clean_book_null_image_url_returns_none(self):
+        result = clean_book(
+            {
+                "url": "http://example.com/b",
+                "title": "Book",
+                "image_url": "   ",
+            }
+        )
+        assert result is not None
+        assert result.image_url is None
+
     def test_clean_book_strips_whitespace(self):
         raw = {
             "url": "  http://example.com/book  ",

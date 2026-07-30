@@ -557,6 +557,41 @@ class TestExportCSV:
         resp = client.get("/widgets/00000000-0000-0000-0000-000000000000/export")
         assert resp.status_code == 404
 
+    def test_export_truncated_header(self, client, created_widget, monkeypatch):
+        import asyncio
+
+        from app.services import lead_service, widget_service
+
+        monkeypatch.setattr("app.services.lead_service.MAX_EXPORT_ROWS", 1)
+
+        widget_id = str(created_widget.id)
+        raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        asyncio.run(
+            repo.create(
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "User 1"},
+                ip_address="1.1.1.1",
+                fingerprint="fp-1",
+            )
+        )
+        asyncio.run(
+            repo.create(
+                widget_id=widget_id,
+                tenant_id=tenant_id,
+                form_data={"name": "User 2"},
+                ip_address="1.1.1.2",
+                fingerprint="fp-2",
+            )
+        )
+
+        resp = client.get(f"/widgets/{widget_id}/export")
+        assert resp.status_code == 200
+        assert resp.headers.get("X-Export-Truncated") == "true"
+
 
 class TestDeleteLead:
     def test_204_delete(self, client, created_widget):

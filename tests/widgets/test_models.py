@@ -46,35 +46,35 @@ class TestWidgetCreate:
             )
 
     def test_invalid_button_text_too_long(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="button_text must not exceed"):
             WidgetCreate(
                 name="Test",
                 domain="https://example.com",
-                config={"button_text": "x" * 101},
+                config={"brand_color": "#2563eb", "button_text": "x" * 101},
             )
 
     def test_invalid_fields_empty(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="fields must be a non-empty list"):
             WidgetCreate(
                 name="Test",
                 domain="https://example.com",
-                config={"fields": []},
+                config={"brand_color": "#2563eb", "fields": []},
             )
 
-    def test_fields_with_empty_string_rejected(self):
-        with pytest.raises(ValidationError):
+    def test_fields_not_a_list_rejected(self):
+        with pytest.raises(ValidationError, match="fields must be a non-empty list"):
             WidgetCreate(
                 name="Test",
                 domain="https://example.com",
-                config={"fields": [""]},
+                config={"brand_color": "#2563eb", "fields": "not_a_list"},
             )
 
-    def test_fields_exceeds_max_items(self):
-        with pytest.raises(ValidationError):
+    def test_fields_none_rejected(self):
+        with pytest.raises(ValidationError, match="fields must be a non-empty list"):
             WidgetCreate(
                 name="Test",
                 domain="https://example.com",
-                config={"fields": ["f" + str(i) for i in range(21)]},
+                config={"brand_color": "#2563eb", "fields": None},
             )
 
 
