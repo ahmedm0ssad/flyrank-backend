@@ -298,3 +298,62 @@ New tests only add coverage — they never change behavior.
 - Both `reset_connection()` and `get_enrichment_job()` were restored in M6.5 with corresponding tests — no longer missing
 
 **Conclusion:** Solid baseline with excellent coverage on lead-capture code paths. Gaps are in edge cases, failure paths, auth checks, and a handful of missing unit tests. Tier A additions would bring this to 8–8.5/10. The two known implementation gaps (Tier B) need code fixes before their tests can pass.
+
+---
+
+## M10 — Coverage Expansion (Milestone 10)
+
+### New test files
+
+| File | What it covers |
+|------|---------------|
+| `tests/repositories/test_core_database.py` | `get_pool()` retry loop, `close_pool()`, `is_postgres_enabled()` |
+| `tests/repositories/test_core_supabase.py` | `get_client_credentials()`, `get_supabase()` lazy init |
+| `tests/repositories/test_core_worker.py` | Documented skip — Redis-failure path blocked by autouse `_reset_queue` fixture |
+| `tests/repositories/test_core_queue.py` | `reset_connection()` (only testable function — lazy-init singletons blocked by autouse fixture) |
+| `tests/repositories/test_core_embed.py` | `normalize_host()` UnicodeError, `parse_origin_host()` empty, `validate_origin()` widget-none/inactive/unparseable-domain |
+| `tests/repositories/test_core_remaining.py` | Consolidated — 15+ modules: `report_service.py` worker paths, `postgres_repo.py` search/filter/stats, `lead_repo.py` date filters, `widget_repo.py` config merge, `lead_service.py` injected-repo/cache-parse-errors, `geo_service.py` ipinfo/ipapi errors, `ai_service.py` Groq real path, `alert.py` critical log, `auth.py` `_email_exists` no-credentials, middleware route registration |
+| `tests/repositories/test_report_repo.py` | Postgres paths appended to existing `TestReportRepositoryPostgres` class |
+
+### Modules moved to CI path
+
+- `tests/core/test_database.py` → `tests/repositories/test_core_database.py` (CI only scans `tests/repositories/`, not `tests/core/`)
+
+### Coverage change (pre-M10 → post-M10)
+
+| Module | Before | After | Δ |
+|--------|--------|-------|---|
+| `app/core/database.py` | 42% | **100%** | +58pp |
+| `app/core/supabase.py` | 71% | **88%** | +17pp |
+| `app/repositories/postgres_repo.py` | 81% | **100%** | +19pp |
+| `app/repositories/report_repo.py` | 64% | **90%** | +26pp |
+| `app/repositories/lead_repo.py` | 97% | **100%** | +3pp |
+| `app/repositories/widget_repo.py` | 96% | **100%** | +4pp |
+| `app/services/report_service.py` | 77% | **82%** | +5pp |
+| `app/services/ai_service.py` | 81% | **100%** | +19pp |
+| `app/services/alert.py` | 75% | **100%** | +25pp |
+| `app/services/geo_service.py` | 92% | **94%** | +2pp |
+| `app/services/lead_service.py` | 96% | **99%** | +3pp |
+| `app/main.py` | 61% | **98%** | +37pp |
+| **Overall** | **82%** | **87%** | **+5pp** |
+
+### Lines deliberately skipped (with reasons)
+
+| File | Lines | Reason |
+|------|-------|--------|
+| `app/core/supabase.py` | 13–14 | Module-level `sys.exit()` — cannot test without killing the test runner |
+| `app/core/worker.py` | 34–35, 41–46 | Real Redis connection required `worker.work()` blocks indefinitely |
+| `app/core/worker.py` | 50 | `if __name__ == "__main__"` guard — standard Python convention |
+| `app/core/queue.py` | 25–27, 32–34, 39–41, 176–181, 186–188 | Lazy-init singletons + `update_report_job` — autouse `_reset_queue` fixture replaces `get_connection`/`get_queue` before each test |
+| `app/dependencies/embed.py` | 17–18 | Origin `None` branch — `request.headers.get("origin")` cannot return `None` via TestClient path |
+| `app/dependencies/leads.py` | 26–27 | `ImportError` fallback in `_get_redis()` — requires corrupting import state |
+| `app/main.py` | 40–41 | `RuntimeError("Missing Supabase credentials")` in `lifespan` — only fires once at TestClient creation, conftest provides valid creds |
+| `app/middleware/body_limit.py` | 12 | Large-body rejection — requires unauthenticated POST endpoint; none exists |
+| `app/services/task_service.py` | 6–8 | Postgres branch at module level — `importlib.reload` cannot override `from ... import is_postgres_enabled` after `_no_postgres` autouse fixture |
+| `app/services/report_service.py` | 93–103, 125–137, 144 | Postgres paths + worker-timeout branch — require real DB or complex mock state |
+
+### New findings
+
+1. **`app/repositories/report_repo.py` Postgres path uses `RETURNING id` but `ReportResponse` expects `report_id`** — the SQLite path maps via `_row_to_response(row)` with positional indexing, so it works. The Postgres path uses `ReportResponse(**dict(row))` which fails on column-name mismatch. This is a latent bug exposed by the new Postgres-path tests (which mock around it). Confirmed by reading source: `report_repo.py:69` vs `models/report.py:15`.
+
+2. **`app/repositories/postgres_repo.py` now 100%** — both the `done` parameter and `ILIKE` search paths are verified in the new tests.
