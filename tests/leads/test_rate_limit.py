@@ -216,3 +216,39 @@ class TestInProcessLimitBounding:
             "victim should still be blocked — its widget_ip count "
             "key was recently accessed and survived LRU eviction"
         )
+
+    @pytest.mark.asyncio
+    async def test_lru_recent_access_survives_eviction(self, monkeypatch):
+        """Create key A early, fill near bound, access A again (moves it
+        to end via move_to_end), then flood past bound — A survives
+        because it was recently touched, not because of creation order."""
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
+        monkeypatch.setattr(
+            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
+        )
+
+        # 1. Create key A early (3 keys)
+        await check_rate_limits("victim", "w-v")         # count = 1
+
+        # 2. Fill to bound with 3 other callers (9 keys) → total 12
+        for i in range(3):
+            await check_rate_limits(f"f-{i}", f"wf-{i}")
+
+        # 3. Access A again — move_to_end protects it
+        await check_rate_limits("victim", "w-v")         # count = 2
+
+        # 4. Flood past bound with 2 more callers → eviction
+        for i in range(2):
+            await check_rate_limits(f"x-{i}", f"wx-{i}")
+
+        assert len(_in_process_limits) <= 12
+
+        # 5. Prove A's count survived: need 28 more calls to hit widget_ip limit of 30
+        for _ in range(28):
+            retry = await check_rate_limits("victim", "w-v")
+            assert retry is None
+        retry = await check_rate_limits("victim", "w-v")
+        assert retry is not None, (
+            "victim's widget_ip count survived eviction — "
+            "move_to_end on every access provides true LRU protection"
+        )

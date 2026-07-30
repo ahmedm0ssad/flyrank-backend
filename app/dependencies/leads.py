@@ -44,6 +44,7 @@ def _check_in_process(ip: str, widget_id: str) -> int | None:
         timestamps = _in_process_limits.get(key, [])
         timestamps = [t for t in timestamps if now - t < window]
         _in_process_limits[key] = timestamps
+        _in_process_limits.move_to_end(key)
         if len(timestamps) >= limit:
             return window
         timestamps.append(now)
