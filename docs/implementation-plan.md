@@ -4,6 +4,8 @@
 
 **Changelog from v1**: fixed origin-validation bypass, moved payload-size enforcement before body parsing, fully specified 3-tier rate limiting, resolved honeypot storage contradiction, unified re-enrich to `POST`, unified CORS description, fixed milestone parallelization vs. dependency graph mismatch, wired the idempotency fingerprint into the pipeline, added widget.js cache-busting, reordered geo provider chain.
 
+**M17 update (2026-07-30):** Corrected validation error status codes from `400` to `422` for all three plan-specified endpoints (`POST /widgets`, `PUT /widgets/{id}`, `POST /public/widget/{widget_id}/submit`). Rationale: `422` is the correct semantic code for schema-validation failures (RFC 4918 §11.2); `400` is reserved for malformed requests (RFC 9110 §15.5.1). This matches FastAPI's default convention and the actual behavior since M6 commit `2715feb` removed the custom `RequestValidationError` handler. No existing external consumers are affected — this is a plan correction to match the implementation.
+
 ---
 
 ## Table of Contents
@@ -316,7 +318,7 @@ Returns a self-invoking function that:
 
 **Status codes**:
 - `201` — accepted
-- `400` — validation error
+- `422` — validation error (schema validation failure; `400` is reserved for malformed requests per RFC 9110)
 - `403` — origin mismatch
 - `404` — widget not found
 - `413` — payload too large (rejected at middleware, before parsing)
@@ -380,7 +382,7 @@ Create a new widget.
 - `config.button_text`: 1–100 chars
 - `config.success_message`: 1–500 chars
 
-**Status codes**: `201`, `400`, `401`, `409` (domain already used)
+**Status codes**: `201`, `422`, `401`, `409` (domain already used)
 
 ---
 
@@ -396,7 +398,7 @@ Widget detail.
 
 Update widget configuration. Same schema as POST, all fields optional. Bumps `js_version` and invalidates both cache keys (§5.4).
 
-**Status codes**: `200`, `400`, `401`, `403`, `404`
+**Status codes**: `200`, `422`, `401`, `403`, `404`
 
 ---
 
@@ -587,7 +589,7 @@ Visitor Browser
     │  └─ 413 immediately if Content-Length > 50KB; body is never read into memory
     ▼
 [3] Request Schema Validation (Pydantic)
-    │  └─ 400 if invalid
+    │  └─ 422 if invalid (schema validation failure — 400 is reserved for malformed requests per RFC 9110)
     ▼
 [4] Widget Exists & Active? (cached config lookup)
     │  └─ 404 if not found / inactive
