@@ -27,6 +27,31 @@ class TestAuthEmailExists:
         result = await _email_exists("test@test.com")
         assert result is False
 
+    @pytest.mark.asyncio
+    async def test_returns_false_on_http_error(self, monkeypatch):
+        fake_response = MagicMock()
+        fake_response.is_error = True
+        async def mock_get(*a, **kw):
+            return fake_response
+        monkeypatch.setattr("app.routers.auth.os.getenv", lambda key, default="": "https://test.supabase.co" if "URL" in key else "test-service-key")
+        monkeypatch.setattr("httpx.AsyncClient", MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock(get=mock_get)), __aexit__=AsyncMock(return_value=None))))
+        from app.routers.auth import _email_exists
+        result = await _email_exists("test@test.com")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_users_found(self, monkeypatch):
+        fake_response = MagicMock()
+        fake_response.is_error = False
+        fake_response.json = MagicMock(return_value={"users": [{"email": "test@test.com"}]})
+        async def mock_get(*a, **kw):
+            return fake_response
+        monkeypatch.setattr("app.routers.auth.os.getenv", lambda key, default="": "https://test.supabase.co" if "URL" in key else "test-service-key")
+        monkeypatch.setattr("httpx.AsyncClient", MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock(get=mock_get)), __exit__=AsyncMock(return_value=None))))
+        from app.routers.auth import _email_exists
+        result = await _email_exists("test@test.com")
+        assert result is True
+
 
 class TestAuthSignup:
     @pytest.mark.asyncio
@@ -87,6 +112,21 @@ class TestAuthSignup:
         fake_supabase = AsyncMock()
         fake_supabase.auth.sign_in_with_password = AsyncMock(
             side_effect=AuthApiError("Some other error", 400, "bad_request")
+        )
+        monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
+
+        from app.models.auth import AuthLogin
+        from app.routers.auth import login
+
+        with pytest.raises(HTTPException) as exc:
+            await login(AuthLogin(email="test@test.com", password="test123"))
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_login_http_exception_re_raised(self, monkeypatch):
+        fake_supabase = AsyncMock()
+        fake_supabase.auth.sign_in_with_password = AsyncMock(
+            side_effect=HTTPException(status_code=400, detail="test http error")
         )
         monkeypatch.setattr("app.routers.auth.get_supabase", AsyncMock(return_value=fake_supabase))
 
@@ -565,20 +605,45 @@ class TestGeoServiceExceptions:
             result = await geo_service._call_ipapi_com("8.8.8.8")
             assert result is None
 
+    @pytest.mark.asyncio
+    async def test_call_ipinfo_timeout_returns_none(self, monkeypatch):
+        monkeypatch.setenv("IPINFO_TOKEN", "test-token")
+        import httpx
 
-# ── app/services/widget_service.py: lines 8-10, 88 ───────────────────
-# Lines 8-10: inside a function body, likely the singleton init.
-# These are tested by existing tests/widgets/test_service.py.
+        async def mock_get_timeout(*a, **kw):
+            raise httpx.TimeoutException("timeout", request=None)
 
-# ── app/main.py: lines 40-41 ──────────────────────────────────────────
-# These are the RuntimeError("Missing Supabase credentials") branch in
-# lifespan. Cannot be tested without breaking the test client singleton
-# — the lifespan only runs once at TestClient creation time, and
-# conftest provides valid credentials. Skip with reason.
+        from app.services import geo_service
+
+        with patch.object(geo_service.httpx, "AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = mock_get_timeout
+            result = await geo_service._call_ipinfo("8.8.8.8")
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_call_ipapi_com_timeout_returns_none(self, monkeypatch):
+        import httpx
+
+        async def mock_get_timeout(*a, **kw):
+            raise httpx.TimeoutException("timeout", request=None)
+
+        from app.services import geo_service
+
+        with patch.object(geo_service.httpx, "AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = mock_get_timeout
+            result = await geo_service._call_ipapi_com("8.8.8.8")
+            assert result is None
 
 
-# ── app/dependencies/leads.py: lines 26-27 ───────────────────────────
-# These are the ImportError/RuntimeError fallback in _get_redis().
-# The fallback fires when app.main.get_redis raises, which only
-# happens if the module isn't fully loaded. Hard to test without
-# corrupting import state. Skip with reason.
+# ── app/dependencies/leads.py: lines 26-27 ────────────────────────────
+
+
+class TestGetRedisFallback:
+    def test_returns_none_when_get_redis_missing(self, monkeypatch):
+        import app.main
+
+        monkeypatch.delattr("app.main.get_redis", raising=False)
+        from app.dependencies.leads import _get_redis
+
+        result = _get_redis()
+        assert result is None

@@ -102,6 +102,27 @@ class TestSubmitLead:
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_enqueue_failure_logs_warning(self, created_widget, monkeypatch):
+        from unittest.mock import MagicMock
+
+        fake_logger = MagicMock()
+        monkeypatch.setattr("app.services.lead_service.logger", fake_logger)
+        monkeypatch.setattr(
+            "app.core.queue.create_enrichment_job",
+            MagicMock(side_effect=Exception("enqueue failed")),
+        )
+
+        widget_id = str(created_widget.id)
+        body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
+        request = FakeRequest()
+
+        lead, was_dedup = await lead_service.submit_lead(widget_id, body, request)
+        assert lead is not None
+        fake_logger.warning.assert_called_once()
+        exc_arg = fake_logger.warning.call_args[0][2]
+        assert "enqueue failed" in str(exc_arg)
+
+    @pytest.mark.asyncio
     async def test_origin_mismatch(self, created_widget):
         widget_id = str(created_widget.id)
         body = LeadSubmit(form_data={"name": "John"})

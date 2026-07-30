@@ -321,6 +321,80 @@ class TestRunEnrichmentJob:
         last_lead_update = lead_updates[-1]
         assert last_lead_update["status"] == "failed"
 
+    def test_lead_not_found_raises_value_error(self, monkeypatch):
+        mock_job = MagicMock()
+        mock_job.id = "test-enrich-9"
+        mock_job.meta = {"max_retries": 3, "current_attempt": 0}
+        mock_job.retries_left = 0
+
+        monkeypatch.setattr(
+            "app.services.lead_worker.get_current_job", lambda: mock_job
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.update_enrichment_job", MagicMock()
+        )
+
+        async def mock_get_by_id_none(self, lead_id):
+            return None
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.get_by_id",
+            mock_get_by_id_none,
+        )
+
+        from app.services.lead_worker import run_enrichment_job
+
+        with pytest.raises(ValueError, match="Lead lead-1 not found"):
+            run_enrichment_job("lead-1")
+
+    def test_update_status_returns_none_raises_value_error(self, monkeypatch):
+        mock_job = MagicMock()
+        mock_job.id = "test-enrich-10"
+        mock_job.meta = {"max_retries": 3, "current_attempt": 0}
+        mock_job.retries_left = 0
+
+        monkeypatch.setattr(
+            "app.services.lead_worker.get_current_job", lambda: mock_job
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.update_enrichment_job", MagicMock()
+        )
+
+        fake_lead = MagicMock()
+        fake_lead.status = "pending"
+        fake_lead.ip_address = "8.8.8.8"
+
+        async def mock_get_by_id(self, lead_id):
+            return fake_lead
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.get_by_id",
+            mock_get_by_id,
+        )
+
+        async def mock_update_status_none(self, lead_id, status, **kw):
+            return None
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.update_status",
+            mock_update_status_none,
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.geo_enrich",
+            lambda ip: {
+                "country": "US",
+                "city": "Mountain View",
+                "region": "California",
+                "isp": "Google",
+                "provider": "ipapi",
+            },
+        )
+
+        from app.services.lead_worker import run_enrichment_job
+
+        with pytest.raises(ValueError, match="Failed to update lead lead-1"):
+            run_enrichment_job("lead-1")
+
     def test_lead_status_updated_to_enriched_on_success(self, monkeypatch):
         mock_job = MagicMock()
         mock_job.id = "test-enrich-8"
