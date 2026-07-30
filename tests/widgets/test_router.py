@@ -96,6 +96,27 @@ class TestListWidgets:
         assert data["total"] == 0
         assert data["items"] == []
 
+    def test_list_widgets_pages_field(self, client, _mock_auth_and_service):
+        mock_service, mock_user = _mock_auth_and_service
+        widget = _make_response(tenant_id=str(mock_user["id"]))
+        mock_service.get_widgets.return_value = ([widget], 1)
+
+        resp = client.get("/widgets/")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pages"] == 1
+
+        widgets = [
+            _make_response(name=f"W{i}", tenant_id=str(mock_user["id"]))
+            for i in range(21)
+        ]
+        mock_service.get_widgets.return_value = (widgets, 21)
+
+        resp = client.get("/widgets/")
+        data = resp.json()
+        assert data["total"] == 21
+        assert data["pages"] == 2
+
     def test_list_widgets_401_without_auth(self, client):
         from fastapi import HTTPException
 
@@ -210,6 +231,19 @@ class TestGetWidget:
         response = client.get(f"/widgets/{uuid.uuid4()}")
         assert response.status_code == 404
 
+    def test_get_widget_401_without_auth(self, client):
+        from fastapi import HTTPException
+
+        def mock_no_user():
+            raise HTTPException(status_code=401, detail="Access token required")
+
+        app.dependency_overrides[get_current_user] = mock_no_user
+        try:
+            response = client.get(f"/widgets/{uuid.uuid4()}")
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
 
 class TestUpdateWidget:
     def test_update_widget_200(self, client, _mock_auth_and_service):
@@ -247,6 +281,22 @@ class TestUpdateWidget:
         )
         assert response.status_code == 422
 
+    def test_update_widget_401_without_auth(self, client):
+        from fastapi import HTTPException
+
+        def mock_no_user():
+            raise HTTPException(status_code=401, detail="Access token required")
+
+        app.dependency_overrides[get_current_user] = mock_no_user
+        try:
+            response = client.put(
+                f"/widgets/{uuid.uuid4()}",
+                json={"name": "Test"},
+            )
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
 
 class TestDeleteWidget:
     def test_delete_widget_204(self, client, _mock_auth_and_service):
@@ -263,3 +313,16 @@ class TestDeleteWidget:
 
         response = client.delete(f"/widgets/{uuid.uuid4()}")
         assert response.status_code == 404
+
+    def test_delete_widget_401_without_auth(self, client):
+        from fastapi import HTTPException
+
+        def mock_no_user():
+            raise HTTPException(status_code=401, detail="Access token required")
+
+        app.dependency_overrides[get_current_user] = mock_no_user
+        try:
+            response = client.delete(f"/widgets/{uuid.uuid4()}")
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)

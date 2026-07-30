@@ -670,6 +670,128 @@ class TestGlobalStats:
         data = resp.json()
         assert "total_leads" in data
 
+    def test_global_stats_excludes_honeypot(self, client, created_widget):
+        import asyncio
+
+        from app.services import lead_service, widget_service
+
+        widget_id = str(created_widget.id)
+        raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        asyncio.run(
+            repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": "Clean"}, ip_address="1.1.1.1",
+                fingerprint="fp-clean",
+            )
+        )
+        asyncio.run(
+            repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": "Bot"}, ip_address="2.2.2.2",
+                fingerprint="fp-bot",
+                honeypot_triggered=True,
+            )
+        )
+
+        resp = client.get("/leads/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_leads"] == 1
+        assert data["honeypot_blocked"] == 1
+
+
+class TestLeadFilters:
+    def test_sort_order_query_param(self, client, created_widget):
+        import asyncio
+        from datetime import datetime, timedelta, timezone
+
+        from app.services import lead_service, widget_service
+
+        widget_id = str(created_widget.id)
+        raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        now = datetime.now(timezone.utc)
+
+        lead1 = asyncio.run(
+            repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": "Alpha"}, ip_address="1.1.1.1",
+                fingerprint="fp-1",
+            )
+        )
+        repo._leads[str(lead1.id)]["created_at"] = now - timedelta(hours=2)
+
+        lead2 = asyncio.run(
+            repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": "Beta"}, ip_address="2.2.2.2",
+                fingerprint="fp-2",
+            )
+        )
+        repo._leads[str(lead2.id)]["created_at"] = now
+
+        resp = client.get(f"/widgets/{widget_id}/leads")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"][0]["form_data"]["name"] == "Beta"
+
+        resp = client.get(f"/widgets/{widget_id}/leads?sort_order=asc")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"][0]["form_data"]["name"] == "Alpha"
+
+    def test_date_from_date_to_query_params(self, client, created_widget):
+        import asyncio
+        from datetime import datetime, timedelta, timezone
+
+        from app.services import lead_service, widget_service
+
+        widget_id = str(created_widget.id)
+        raw = asyncio.run(widget_service._get_repo().get_by_id_raw(widget_id))
+        tenant_id = str(raw["tenant_id"])
+
+        repo = lead_service._get_or_create_repo()
+        now = datetime.now(timezone.utc)
+
+        asyncio.run(
+            repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": "Old"}, ip_address="1.1.1.1",
+                fingerprint="fp-old",
+            )
+        )
+
+        asyncio.run(
+            repo.create(
+                widget_id=widget_id, tenant_id=tenant_id,
+                form_data={"name": "Current"}, ip_address="2.2.2.2",
+                fingerprint="fp-cur",
+            )
+        )
+
+        yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        resp = client.get(
+            f"/widgets/{widget_id}/leads"
+            f"?date_from={yesterday}&date_to={tomorrow}"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+
+        resp = client.get(
+            f"/widgets/{widget_id}/leads"
+            f"?date_from=2020-01-01&date_to=2020-12-31"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+
 
 class TestSubmissionPersistence:
     def test_created_at_updated_at_timestamps(self, client, created_widget):
