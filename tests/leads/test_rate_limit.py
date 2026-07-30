@@ -169,7 +169,9 @@ class TestInProcessLimitBounding:
         assert len(_in_process_limits) <= bound
 
     @pytest.mark.asyncio
-    async def test_single_ip_still_rate_limited_after_clear(self, monkeypatch):
+    async def test_new_ip_still_rate_limited_after_lru_eviction(self, monkeypatch):
+        """An IP that starts fresh after eviction still builds up to the
+        limit correctly (no ghost state from pre-eviction keys)."""
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
         monkeypatch.setattr(
             "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
@@ -183,3 +185,34 @@ class TestInProcessLimitBounding:
         for _ in range(limit + 1):
             retry_after = await check_rate_limits(ip, "widget-1")
         assert retry_after is not None
+
+    @pytest.mark.asyncio
+    async def test_over_limit_ip_stays_blocked_after_lru_eviction(self, monkeypatch):
+        """Block an IP on a tight bound, then add more keys past the
+        bound. The most recently accessed per-widget limit key survives
+        LRU eviction, so the victim stays blocked."""
+        monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
+        monkeypatch.setattr(
+            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
+        )
+
+        for i in range(3):
+            await check_rate_limits(f"filler-{i}", f"fw-{i}")
+
+        victim = "10.0.0.1"
+        widget_v = "victim-w"
+        for _ in range(31):
+            await check_rate_limits(victim, widget_v)
+        retry_after = await check_rate_limits(victim, widget_v)
+        assert retry_after is not None, "victim should be blocked"
+
+        for i in range(2):
+            await check_rate_limits(f"extra-{i}", f"ew-{i}")
+
+        assert len(_in_process_limits) <= 12
+
+        retry_after = await check_rate_limits(victim, widget_v)
+        assert retry_after is not None, (
+            "victim should still be blocked — its widget_ip count "
+            "key was recently accessed and survived LRU eviction"
+        )

@@ -1,6 +1,6 @@
 import logging
 import time
-from collections import defaultdict
+from collections import OrderedDict
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
@@ -27,7 +27,7 @@ def _get_redis():
         return None
 
 
-_in_process_limits: dict[str, list[float]] = defaultdict(list)
+_in_process_limits: dict[str, list[float]] = OrderedDict()
 _MAX_IN_PROCESS_KEYS = 10_000
 
 
@@ -41,15 +41,19 @@ def _check_in_process(ip: str, widget_id: str) -> int | None:
     ]
 
     for key, limit in keys_and_limits:
-        _in_process_limits[key] = [
-            t for t in _in_process_limits[key] if now - t < window
-        ]
-        if len(_in_process_limits[key]) >= limit:
+        timestamps = _in_process_limits.get(key, [])
+        timestamps = [t for t in timestamps if now - t < window]
+        _in_process_limits[key] = timestamps
+        if len(timestamps) >= limit:
             return window
-        _in_process_limits[key].append(now)
+        timestamps.append(now)
 
     if len(_in_process_limits) > _MAX_IN_PROCESS_KEYS:
-        _in_process_limits.clear()
+        # LRU eviction: pop oldest entries (insertion order = access order).
+        # This preserves rate-limit state for recently-active IPs.
+        overage = len(_in_process_limits) - _MAX_IN_PROCESS_KEYS
+        for _ in range(overage + 5):
+            _in_process_limits.popitem(last=False)
 
     return None
 
