@@ -1,8 +1,18 @@
+import os
 from unittest.mock import MagicMock, patch
 
 import requests
 
 from app.scrapers.session import DEFAULT_DELAY, RobotsChecker, ScrapeSession
+
+FIXTURE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "fixtures", "scraper_html"
+)
+
+
+def _read_fixture(name: str) -> str:
+    with open(os.path.join(FIXTURE_DIR, name), encoding="utf-8") as f:
+        return f.read()
 
 
 class TestRobotsChecker:
@@ -223,4 +233,89 @@ class TestScrapeSession:
 
             result = session.fetch("http://example.com/page")
             assert result is None
+            session.close()
+
+
+class TestRobotsCheckerFixtures:
+    def test_load_with_robots_disallow_all_fixture(self):
+        checker = RobotsChecker("http://books.toscrape.com", "FlyRankBot/1.0")
+        session = MagicMock()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = _read_fixture("robots_disallow_all.txt")
+        session.get.return_value = resp
+
+        checker.load(session)
+        assert checker._loaded is True
+        assert len(checker._disallowed_paths) == 1
+        assert checker._disallowed_paths[0] == "/"
+        assert checker._crawl_delay == 10.0
+
+    def test_load_with_partial_robots_fixture(self):
+        checker = RobotsChecker("http://books.toscrape.com", "FlyRankBot/1.0")
+        session = MagicMock()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = _read_fixture("robots_partial.txt")
+        session.get.return_value = resp
+
+        checker.load(session)
+        assert checker._loaded is True
+        assert "/admin" in checker._disallowed_paths
+        assert "/private" in checker._disallowed_paths
+        assert checker._crawl_delay == 5.0
+
+    def test_load_with_no_match_robots_fixture(self):
+        checker = RobotsChecker("http://books.toscrape.com", "FlyRankBot/1.0")
+        session = MagicMock()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = _read_fixture("robots_no_match.txt")
+        session.get.return_value = resp
+
+        checker.load(session)
+        assert checker._loaded is True
+        assert len(checker._disallowed_paths) == 0
+        assert checker._crawl_delay == 0.0
+
+    def test_parse_with_empty_disallow_path(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._parse("User-agent: *\nDisallow:\nDisallow: /admin")
+        assert checker._disallowed_paths == ["/admin"]
+
+    def test_parse_with_multiple_ua_sections(self):
+        checker = RobotsChecker("http://example.com", "TestBot/1.0")
+        checker._parse(
+            "User-agent: GoogleBot\nDisallow: /google-only\n\n"
+            "User-agent: TestBot\nDisallow: /api\nDisallow: /secret\n"
+            "Crawl-delay: 3\n\n"
+            "User-agent: BingBot\nDisallow: /bing"
+        )
+        assert checker._disallowed_paths == ["/api", "/secret"]
+        assert checker._crawl_delay == 3.0
+
+
+class TestScrapeSessionFixtures:
+    def test_fetch_with_robots_deny_all(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://books.toscrape.com")
+            session._robots._disallowed_paths = ["/"]
+            session._robots._loaded = True
+            result = session.fetch("http://books.toscrape.com/any-page")
+            assert result is None
+            session.close()
+
+    def test_fetch_from_robots_fixture_validated(self):
+        with patch("app.scrapers.session.RobotsChecker.load"):
+            session = ScrapeSession("http://books.toscrape.com")
+            session._robots._loaded = True
+            session._robots._disallowed_paths = ["/admin"]
+            session._robots._crawl_delay = 0
+            session._delay = 0
+            mock_resp = MagicMock()
+            mock_resp.text = _read_fixture("valid_listing.html")
+            session._session.get = MagicMock(return_value=mock_resp)
+            result = session.fetch("http://books.toscrape.com/catalogue/page-1.html")
+            assert result is not None
+            assert "product_pod" in result
             session.close()

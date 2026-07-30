@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /admin
+Disallow: /private
+Disallow: /catalogue/*/secret
+Crawl-delay: 2
+
+User-agent: FlyRankBot
+Disallow: /api
+Crawl-delay: 5
