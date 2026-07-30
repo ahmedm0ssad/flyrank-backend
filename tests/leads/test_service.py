@@ -123,6 +123,41 @@ class TestSubmitLead:
         assert "enqueue failed" in str(exc_arg)
 
     @pytest.mark.asyncio
+    async def test_honeypot_skips_heuristic_scoring(
+        self, created_widget, monkeypatch
+    ):
+        from app.services import widget_service
+
+        def failing_score(form_data):
+            raise RuntimeError(
+                "score_submission should not be called when honeypot triggered"
+            )
+
+        monkeypatch.setattr(
+            "app.services.lead_service.score_submission", failing_score
+        )
+
+        widget_id = str(created_widget.id)
+        raw = await widget_service._get_repo().get_by_id_raw(widget_id)
+        honeypot_field = raw["config"].get("honeypot_field", "_hp_a3f9")
+
+        body = LeadSubmit(
+            form_data={
+                "name": "Bot",
+                "email": "bot@spam.com",
+                honeypot_field: "filled by bot",
+            }
+        )
+        request = FakeRequest()
+
+        lead, was_dedup = await lead_service.submit_lead(widget_id, body, request)
+        assert lead is not None
+        assert lead.honeypot_triggered is True
+        assert lead.spam_score == 1.0
+        assert lead.spam_reasons == ["honeypot"]
+        assert was_dedup is False
+
+    @pytest.mark.asyncio
     async def test_origin_mismatch(self, created_widget):
         widget_id = str(created_widget.id)
         body = LeadSubmit(form_data={"name": "John"})

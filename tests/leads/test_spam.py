@@ -113,3 +113,28 @@ class TestSpamEdgeCases:
         score, reasons = score_submission({"name": "John", "email": "john@example.com"})
         assert score == 0.0
         assert reasons == []
+
+
+class TestSpamThreshold:
+    def test_score_at_threshold(self):
+        score, reasons = score_submission(
+            {
+                "name": "John",
+                "email": "john@mailinator.com",
+                "phone": "abc",
+            }
+        )
+        assert score == 0.5
+        assert "disposable_email_domain" in reasons
+        assert "phone_pattern_mismatch" in reasons
+
+    def test_score_below_threshold_max(self):
+        score, reasons = score_submission(
+            {
+                "name": "John",
+                "email": "john@mailinator.com",
+            }
+        )
+        assert score == 0.4
+        assert score < 0.5
+        assert reasons == ["disposable_email_domain"]
