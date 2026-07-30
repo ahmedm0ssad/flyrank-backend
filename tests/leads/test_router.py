@@ -95,6 +95,78 @@ class TestSubmitLead:
         )
         assert resp.status_code == 429
 
+    def test_429_retry_after_header(self, client, created_widget, monkeypatch):
+        async def mock_over_limit(ip, widget_id):
+            return 60
+
+        monkeypatch.setattr(
+            "app.services.lead_service.check_rate_limits", mock_over_limit
+        )
+
+        widget_id = str(created_widget.id)
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            json={"form_data": {"name": "John"}},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 429
+        assert resp.headers.get("retry-after") == "60"
+
+    def test_window_reset_after_retry_after_expires(
+        self, client, created_widget, monkeypatch
+    ):
+        widget_id = str(created_widget.id)
+        payload = {"form_data": {"name": "John"}}
+        headers = {"Origin": "https://myshop.com"}
+
+        call_count = [0]
+
+        async def mock_check_rates(ip, widget_id):
+            call_count[0] += 1
+            if call_count[0] <= 1:
+                return 60
+            return None
+
+        monkeypatch.setattr(
+            "app.services.lead_service.check_rate_limits", mock_check_rates
+        )
+
+        resp1 = client.post(
+            f"/public/widget/{widget_id}/submit", json=payload, headers=headers
+        )
+        assert resp1.status_code == 429
+        assert resp1.headers.get("retry-after") == "60"
+
+        resp2 = client.post(
+            f"/public/widget/{widget_id}/submit", json=payload, headers=headers
+        )
+        assert resp2.status_code == 201
+
+    def test_rate_limit_takes_precedence_over_dedup(
+        self, client, created_widget, monkeypatch
+    ):
+        widget_id = str(created_widget.id)
+        payload = {"form_data": {"name": "John"}}
+        headers = {"Origin": "https://myshop.com"}
+
+        resp1 = client.post(
+            f"/public/widget/{widget_id}/submit", json=payload, headers=headers
+        )
+        assert resp1.status_code == 201
+
+        async def mock_over_limit(ip, widget_id):
+            return 60
+
+        monkeypatch.setattr(
+            "app.services.lead_service.check_rate_limits", mock_over_limit
+        )
+
+        resp2 = client.post(
+            f"/public/widget/{widget_id}/submit", json=payload, headers=headers
+        )
+        assert resp2.status_code == 429
+        assert resp2.headers.get("retry-after") == "60"
+
     def test_honeypot_returns_fake_success(self, client, created_widget):
         import asyncio
 
@@ -139,6 +211,86 @@ class TestSubmitLead:
         lead_id2 = resp2.json()["lead_id"]
 
         assert lead_id1 == lead_id2
+
+
+class TestValidationEdgeCases:
+    def test_malformed_json_body(self, client, created_widget):
+        widget_id = str(created_widget.id)
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            content=b"{bad json]}",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "https://myshop.com",
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_empty_body_rejected(self, client, created_widget):
+        widget_id = str(created_widget.id)
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "https://myshop.com",
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_invalid_widget_id_format(self, client):
+        resp = client.post(
+            "/public/widget/abc/submit",
+            json={"form_data": {"name": "John"}},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 422
+
+    def test_path_traversal_widget_id(self, client):
+        resp = client.post(
+            "/public/widget/../../etc/passwd/submit",
+            json={"form_data": {"name": "John"}},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 404
+
+    def test_missing_content_type(self, client, created_widget):
+        import json as _json
+
+        widget_id = str(created_widget.id)
+        body = _json.dumps({"form_data": {"name": "John"}})
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            content=body,
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["success"] is True
+        assert "lead_id" in data
+
+    def test_xml_content_type_rejected(self, client, created_widget):
+        import json as _json
+
+        widget_id = str(created_widget.id)
+        body = _json.dumps({"form_data": {"name": "John"}})
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            content=body,
+            headers={
+                "Content-Type": "application/xml",
+                "Origin": "https://myshop.com",
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_empty_form_data_dict_rejected(self, client, created_widget):
+        widget_id = str(created_widget.id)
+        resp = client.post(
+            f"/public/widget/{widget_id}/submit",
+            json={"form_data": {}},
+            headers={"Origin": "https://myshop.com"},
+        )
+        assert resp.status_code == 422
 
 
 class TestReEnrichLead:
