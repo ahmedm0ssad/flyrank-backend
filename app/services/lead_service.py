@@ -9,6 +9,8 @@ from uuid import UUID
 from fastapi import HTTPException, Request, status
 
 from app.dependencies.leads import check_origin, check_rate_limits
+from app.dependencies.services import get_lead_repo as _get_lead_repo
+from app.dependencies.services import get_redis as _get_redis_provider
 from app.models.lead import LeadResponse, LeadSubmit
 from app.repositories.lead_repo import LeadRepository
 from app.services import embed_service
@@ -26,37 +28,21 @@ MAX_EXPORT_ROWS = 10000
 
 
 def _get_repo():
-    return LeadRepository()
-
-
-_repo: LeadRepository | None = None
-
-_redis_client = None
+    return _get_lead_repo()
 
 
 def _get_or_create_repo(repo: LeadRepository | None = None):
-    global _repo
     if repo is not None:
-        _repo = repo
-    if _repo is None:
-        _repo = _get_repo()
-    return _repo
+        return repo
+    return _get_lead_repo()
 
 
 async def _get_redis():
-    global _redis_client
-    if _redis_client is None:
-        try:
-            from app.main import get_redis
-
-            _redis_client = get_redis()
-        except (ImportError, RuntimeError):
-            pass
-    return _redis_client
+    return await _get_redis_provider()
 
 
-async def _cache_stats(cache_key: str, stats: dict, ttl: int = 300):
-    client = await _get_redis()
+async def _cache_stats(cache_key: str, stats: dict, ttl: int = 300, redis=None):
+    client = redis if redis is not None else await _get_redis()
     if client:
         try:
             await client.setex(cache_key, ttl, json.dumps(stats))
@@ -65,9 +51,11 @@ async def _cache_stats(cache_key: str, stats: dict, ttl: int = 300):
 
 
 async def _invalidate_stats_cache(
-    widget_id: str | None = None, tenant_id: str | None = None
+    widget_id: str | None = None,
+    tenant_id: str | None = None,
+    redis=None,
 ):
-    client = await _get_redis()
+    client = redis if redis is not None else await _get_redis()
     if client:
         try:
             keys_to_delete = []
@@ -97,8 +85,9 @@ async def submit_lead(
     widget_id: str,
     body: LeadSubmit,
     request: Request,
+    repo: LeadRepository | None = None,
 ) -> tuple[LeadResponse, bool]:
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     ip = request.client.host if request.client else "unknown"
 
     # Step 4: Widget exists & active check
@@ -261,8 +250,9 @@ async def get_leads(
     date_to: date | None = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    repo: LeadRepository | None = None,
 ) -> tuple[list[LeadResponse], int]:
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     return await repo.list_by_widget(
         widget_id=widget_id,
         tenant_id=tenant_id,
@@ -293,8 +283,9 @@ async def get_all_leads(
     date_to: date | None = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    repo: LeadRepository | None = None,
 ) -> tuple[list[LeadResponse], int]:
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     return await repo.list_by_tenant(
         tenant_id=tenant_id,
         include_honeypot=include_honeypot,
@@ -312,9 +303,12 @@ async def get_all_leads(
 
 
 async def get_lead_detail(
-    lead_id: str, widget_id: str, tenant_id: str
+    lead_id: str,
+    widget_id: str,
+    tenant_id: str,
+    repo: LeadRepository | None = None,
 ) -> LeadResponse | None:
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     lead = await repo.get_by_id(lead_id)
     if lead is None:
         return None
@@ -324,9 +318,13 @@ async def get_lead_detail(
 
 
 async def get_widget_stats(
-    widget_id: str, tenant_id: str, skip_cache: bool = False
+    widget_id: str,
+    tenant_id: str,
+    skip_cache: bool = False,
+    repo: LeadRepository | None = None,
+    redis=None,
 ) -> dict:
-    client = await _get_redis()
+    client = redis if redis is not None else await _get_redis()
     cache_key = f"stats:widget:{widget_id}"
 
     if client and not skip_cache:
@@ -339,16 +337,21 @@ async def get_widget_stats(
         except Exception:
             pass
 
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     stats = await repo.get_stats(widget_id, tenant_id)
 
     if client:
-        await _cache_stats(cache_key, stats)
+        await _cache_stats(cache_key, stats, redis=redis)
     return stats
 
 
-async def get_tenant_stats(tenant_id: str, skip_cache: bool = False) -> dict:
-    client = await _get_redis()
+async def get_tenant_stats(
+    tenant_id: str,
+    skip_cache: bool = False,
+    repo: LeadRepository | None = None,
+    redis=None,
+) -> dict:
+    client = redis if redis is not None else await _get_redis()
     cache_key = f"stats:tenant:{tenant_id}"
 
     if client and not skip_cache:
@@ -361,11 +364,11 @@ async def get_tenant_stats(tenant_id: str, skip_cache: bool = False) -> dict:
         except Exception:
             pass
 
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     stats = await repo.get_tenant_stats(tenant_id)
 
     if client:
-        await _cache_stats(cache_key, stats)
+        await _cache_stats(cache_key, stats, redis=redis)
     return stats
 
 
@@ -374,8 +377,9 @@ async def export_csv(
     tenant_id: str,
     date_from: date | None = None,
     date_to: date | None = None,
+    repo: LeadRepository | None = None,
 ) -> tuple[str, bool]:
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     leads = await repo.get_export_data(
         widget_id=widget_id,
         tenant_id=tenant_id,
@@ -431,8 +435,10 @@ async def export_csv(
     return output.getvalue(), truncated
 
 
-async def delete_lead(lead_id: str, widget_id: str, tenant_id: str) -> bool:
-    repo = _get_or_create_repo()
+async def delete_lead(
+    lead_id: str, widget_id: str, tenant_id: str, repo: LeadRepository | None = None
+) -> bool:
+    repo = _get_or_create_repo(repo)
     result = await repo.delete(lead_id, widget_id, tenant_id)
     if result:
         await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
@@ -440,19 +446,27 @@ async def delete_lead(lead_id: str, widget_id: str, tenant_id: str) -> bool:
 
 
 async def batch_delete_leads(
-    lead_ids: list[str], widget_id: str, tenant_id: str
+    lead_ids: list[str],
+    widget_id: str,
+    tenant_id: str,
+    repo: LeadRepository | None = None,
 ) -> int:
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     count = await repo.batch_delete(lead_ids, widget_id, tenant_id)
     if count > 0:
         await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
     return count
 
 
-async def re_enrich_lead(lead_id: str, widget_id: str, tenant_id: str) -> dict:
+async def re_enrich_lead(
+    lead_id: str,
+    widget_id: str,
+    tenant_id: str,
+    repo: LeadRepository | None = None,
+) -> dict:
     from app.core.queue import create_enrichment_job, get_enrichment_active
 
-    repo = _get_or_create_repo()
+    repo = _get_or_create_repo(repo)
     lead = await repo.get_by_id(lead_id)
     if lead is None or str(lead.widget_id) != widget_id:
         raise HTTPException(
@@ -461,9 +475,7 @@ async def re_enrich_lead(lead_id: str, widget_id: str, tenant_id: str) -> dict:
         )
 
     loop = asyncio.get_event_loop()
-    active_job_id = await loop.run_in_executor(
-        None, get_enrichment_active, lead_id
-    )
+    active_job_id = await loop.run_in_executor(None, get_enrichment_active, lead_id)
     if active_job_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

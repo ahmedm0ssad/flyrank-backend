@@ -16,7 +16,6 @@ class TestGetRepo:
 
 class TestGetOrCreateRepo:
     def test_returns_same_instance_on_calls(self):
-        lead_service._repo = None
         repo1 = lead_service._get_or_create_repo()
         repo2 = lead_service._get_or_create_repo()
         assert repo1 is repo2
@@ -25,16 +24,19 @@ class TestGetOrCreateRepo:
 class TestGetRedis:
     @pytest.mark.asyncio
     async def test_returns_redis_client(self, monkeypatch):
-        lead_service._redis_client = None
         fake_redis = MagicMock()
-        monkeypatch.setattr("app.main.get_redis", lambda: fake_redis)
+        monkeypatch.setattr(
+            "app.services.lead_service._get_redis",
+            AsyncMock(return_value=fake_redis),
+        )
         result = await lead_service._get_redis()
         assert result is fake_redis
 
     @pytest.mark.asyncio
     async def test_returns_none_when_get_redis_fails(self):
-        lead_service._redis_client = None
-        with patch("app.main.get_redis", side_effect=RuntimeError("no redis")):
+        with patch(
+            "app.services.lead_service._get_redis", AsyncMock(return_value=None)
+        ):
             result = await lead_service._get_redis()
             assert result is None
 

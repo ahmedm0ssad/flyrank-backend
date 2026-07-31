@@ -5,12 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 
 from app.dependencies.auth import get_current_user
+from app.dependencies.services import get_lead_repo
 from app.models.lead import (
     BatchDeleteRequest,
     LeadResponse,
     LeadSubmit,
     PaginatedLeadResponse,
 )
+from app.repositories.lead_repo import LeadRepository
 from app.services import lead_service, widget_service
 
 router = APIRouter(prefix="/public/widget", tags=["public-leads"])
@@ -19,8 +21,13 @@ cross_router = APIRouter(prefix="/leads", tags=["leads"])
 
 
 @router.post("/{widget_id}/submit", status_code=status.HTTP_201_CREATED)
-async def submit_lead(widget_id: UUID, body: LeadSubmit, request: Request):
-    lead, _ = await lead_service.submit_lead(str(widget_id), body, request)
+async def submit_lead(
+    widget_id: UUID,
+    body: LeadSubmit,
+    request: Request,
+    repo: LeadRepository = Depends(get_lead_repo),
+):
+    lead, _ = await lead_service.submit_lead(str(widget_id), body, request, repo=repo)
 
     return {
         "success": True,
@@ -64,6 +71,7 @@ async def list_widget_leads(
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc"),
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
 
@@ -88,6 +96,7 @@ async def list_widget_leads(
         date_to=date_to,
         sort_by=sort_by,
         sort_order=sort_order,
+        repo=repo,
     )
     return _paginated_response(items, total, page, page_size)
 
@@ -112,6 +121,7 @@ async def list_all_leads(
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc"),
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
     items, total = await lead_service.get_all_leads(
@@ -127,6 +137,7 @@ async def list_all_leads(
         date_to=date_to,
         sort_by=sort_by,
         sort_order=sort_order,
+        repo=repo,
     )
     return _paginated_response(items, total, page, page_size)
 
@@ -142,12 +153,14 @@ async def get_lead_detail(
     widget_id: UUID,
     lead_id: UUID,
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
     lead = await lead_service.get_lead_detail(
         lead_id=str(lead_id),
         widget_id=str(widget_id),
         tenant_id=tenant_id,
+        repo=repo,
     )
     if lead is None:
         raise HTTPException(
@@ -164,6 +177,7 @@ async def get_lead_detail(
 async def get_widget_stats(
     widget_id: UUID,
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
 
@@ -177,6 +191,7 @@ async def get_widget_stats(
     stats = await lead_service.get_widget_stats(
         widget_id=str(widget_id),
         tenant_id=tenant_id,
+        repo=repo,
     )
     return stats
 
@@ -187,9 +202,10 @@ async def get_widget_stats(
 @cross_router.get("/stats")
 async def get_global_stats(
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
-    stats = await lead_service.get_tenant_stats(tenant_id=tenant_id)
+    stats = await lead_service.get_tenant_stats(tenant_id=tenant_id, repo=repo)
     return stats
 
 
@@ -202,6 +218,7 @@ async def export_leads_csv(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
 
@@ -217,6 +234,7 @@ async def export_leads_csv(
         tenant_id=tenant_id,
         date_from=date_from,
         date_to=date_to,
+        repo=repo,
     )
 
     headers = {
@@ -243,12 +261,14 @@ async def delete_lead(
     widget_id: UUID,
     lead_id: UUID,
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
     deleted = await lead_service.delete_lead(
         lead_id=str(lead_id),
         widget_id=str(widget_id),
         tenant_id=tenant_id,
+        repo=repo,
     )
     if not deleted:
         raise HTTPException(
@@ -268,6 +288,7 @@ async def batch_delete_leads(
     widget_id: UUID,
     body: BatchDeleteRequest,
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
     lead_ids = [str(lid) for lid in body.lead_ids]
@@ -275,6 +296,7 @@ async def batch_delete_leads(
         lead_ids=lead_ids,
         widget_id=str(widget_id),
         tenant_id=tenant_id,
+        repo=repo,
     )
 
 
@@ -289,6 +311,7 @@ async def re_enrich_lead(
     widget_id: UUID,
     lead_id: UUID,
     user: dict = Depends(get_current_user),
+    repo: LeadRepository = Depends(get_lead_repo),
 ):
     tenant_id = str(user["id"])
 
@@ -303,4 +326,5 @@ async def re_enrich_lead(
         lead_id=str(lead_id),
         widget_id=str(widget_id),
         tenant_id=tenant_id,
+        repo=repo,
     )
