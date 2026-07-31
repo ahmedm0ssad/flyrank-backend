@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -39,6 +40,17 @@ class WidgetCreate(BaseModel):
         fields = config.get("fields", [])
         if not isinstance(fields, list) or len(fields) == 0:
             raise ValueError("fields must be a non-empty list")
+
+        webhook_url = config.get("webhook_url")
+        if webhook_url:
+            if not isinstance(webhook_url, str) or not webhook_url.startswith(
+                "https://"
+            ):
+                raise ValueError(
+                    "webhook_url must be an HTTPS URL starting with https://"
+                )
+            if not urlparse(webhook_url).netloc:
+                raise ValueError("webhook_url must include a host")
 
         return self
 

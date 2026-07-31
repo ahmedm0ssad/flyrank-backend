@@ -20,6 +20,7 @@ from app.services.fingerprint_service import (
     mark_seen,
 )
 from app.services.spam_service import score_submission
+from app.services.webhook_service import dispatch_webhook
 
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("app.audit.submission")
@@ -187,6 +188,20 @@ async def submit_lead(
 
     # Invalidate stats cache best-effort
     await _invalidate_stats_cache(widget_id=widget_id, tenant_id=tenant_id)
+
+    # Step 10b: Dispatch webhook (fire-and-forget; skipped for honeypot)
+    # A successful submission must never be turned into an error by the
+    # webhook, so the call is backgrounded and dispatch_webhook never
+    # raises.
+    webhook_url = widget_config.get("webhook_url") or ""
+    if webhook_url and not honeypot_triggered:
+        payload = {
+            "lead_id": str(lead.id),
+            "widget_id": widget_id,
+            "form_data": body.form_data,
+            "created_at": lead.created_at.isoformat(),
+        }
+        asyncio.create_task(dispatch_webhook(webhook_url, payload))
 
     # Step 11: Enqueue enrichment job (skipped for honeypot)
     if not skip_enrich:

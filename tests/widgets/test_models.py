@@ -77,6 +77,62 @@ class TestWidgetCreate:
                 config={"brand_color": "#2563eb", "fields": None},
             )
 
+    def test_valid_https_webhook_url(self):
+        w = WidgetCreate(
+            name="Test",
+            domain="https://example.com",
+            config={
+                "brand_color": "#2563eb",
+                "fields": ["name"],
+                "webhook_url": "https://hooks.example.com/lead",
+            },
+        )
+        assert w.config["webhook_url"] == "https://hooks.example.com/lead"
+
+    def test_empty_webhook_url_disables_feature(self):
+        w = WidgetCreate(
+            name="Test",
+            domain="https://example.com",
+            config={"brand_color": "#2563eb", "fields": ["name"], "webhook_url": ""},
+        )
+        assert w.config["webhook_url"] == ""
+
+    def test_non_https_webhook_url_rejected(self):
+        with pytest.raises(ValidationError, match="webhook_url must be an HTTPS"):
+            WidgetCreate(
+                name="Test",
+                domain="https://example.com",
+                config={
+                    "brand_color": "#2563eb",
+                    "fields": ["name"],
+                    "webhook_url": "http://hooks.example.com/lead",
+                },
+            )
+
+    def test_malformed_webhook_url_rejected(self):
+        with pytest.raises(ValidationError, match="webhook_url must be an HTTPS"):
+            WidgetCreate(
+                name="Test",
+                domain="https://example.com",
+                config={
+                    "brand_color": "#2563eb",
+                    "fields": ["name"],
+                    "webhook_url": "hooks.example.com/lead",
+                },
+            )
+
+    def test_webhook_url_without_host_rejected(self):
+        with pytest.raises(ValidationError, match="webhook_url must include a host"):
+            WidgetCreate(
+                name="Test",
+                domain="https://example.com",
+                config={
+                    "brand_color": "#2563eb",
+                    "fields": ["name"],
+                    "webhook_url": "https://",
+                },
+            )
+
 
 class TestWidgetUpdate:
     def test_valid_partial_update(self):
