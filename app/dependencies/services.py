@@ -9,7 +9,16 @@ _redis = None
 def get_lead_repo() -> LeadRepository:
     global _lead_repo
     if _lead_repo is None:
-        _lead_repo = LeadRepository()
+        from app.core.database import is_postgres_enabled
+
+        if is_postgres_enabled():
+            from app.repositories.postgres_lead_repo import (
+                PostgresLeadRepository,
+            )
+
+            _lead_repo = PostgresLeadRepository()
+        else:
+            _lead_repo = LeadRepository()
     return _lead_repo
 
 

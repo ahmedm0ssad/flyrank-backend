@@ -16,6 +16,16 @@ from app.services.geo_service import geo_enrich
 logger = logging.getLogger(__name__)
 
 
+def _get_worker_repo():
+    from app.core.database import is_postgres_enabled
+
+    if is_postgres_enabled():
+        from app.repositories.postgres_lead_repo import PostgresLeadRepository
+
+        return PostgresLeadRepository()
+    return LeadRepository()
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -28,7 +38,7 @@ def run_enrichment_job(lead_id: str) -> str:
     update_enrichment_job(job_id, JobStatus.STARTED.value, started_at=_now())
 
     try:
-        repo = LeadRepository()
+        repo = _get_worker_repo()
         lead = asyncio.run(repo.get_by_id(lead_id))
         if lead is None:
             raise ValueError(f"Lead {lead_id} not found")
@@ -101,7 +111,7 @@ def run_enrichment_job(lead_id: str) -> str:
             )
         else:
             try:
-                repo = LeadRepository()
+                repo = _get_worker_repo()
                 asyncio.run(repo.update_status(lead_id, "failed"))
             except Exception:
                 pass
