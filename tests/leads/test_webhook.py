@@ -11,6 +11,13 @@ pytestmark = pytest.mark.usefixtures("mock_redis")
 WEBHOOK_URL = "https://hooks.example.com/lead"
 
 
+@pytest.fixture(autouse=True)
+def _clear_webhook_tasks():
+    lead_service._webhook_tasks.clear()
+    yield
+    lead_service._webhook_tasks.clear()
+
+
 class FakeRequest:
     def __init__(
         self, ip="127.0.0.1", origin="https://myshop.com", ua="test-agent", referer=""
@@ -86,6 +93,38 @@ class TestWebhookDispatch:
 
         await asyncio.sleep(0)
         assert dispatch.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_webhook_task_retained_until_completion(
+        self, webhook_widget, monkeypatch
+    ):
+        dispatch = AsyncMock(return_value=True)
+        monkeypatch.setattr("app.services.lead_service.dispatch_webhook", dispatch)
+
+        body = LeadSubmit(form_data={"name": "John", "email": "john@test.com"})
+        request = FakeRequest()
+
+        lead, _was_dedup = await lead_service.submit_lead(
+            str(webhook_widget.id), body, request
+        )
+        assert lead is not None
+
+        # asyncio keeps only weak references to tasks, so the module-level
+        # set must hold a strong reference while the task is in flight or
+        # the task could be garbage-collected mid-execution.
+        assert len(lead_service._webhook_tasks) == 1
+        task = next(iter(lead_service._webhook_tasks))
+        assert task is not None
+        assert task.done() is False
+
+        await asyncio.sleep(0)
+        assert dispatch.await_count == 1
+        assert task.done() is True
+        for _ in range(10):
+            if not lead_service._webhook_tasks:
+                break
+            await asyncio.sleep(0)
+        assert lead_service._webhook_tasks == set()
 
     @pytest.mark.asyncio
     async def test_no_webhook_url_no_dispatch(self, created_widget, monkeypatch):

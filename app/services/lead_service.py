@@ -27,6 +27,18 @@ audit_logger = logging.getLogger("app.audit.submission")
 
 MAX_EXPORT_ROWS = 10000
 
+# Strong references to in-flight webhook tasks. asyncio only keeps weak
+# references to tasks, so without this set a fire-and-forget task could be
+# garbage-collected mid-execution and silently die; each task discards
+# itself via add_done_callback once it completes.
+_webhook_tasks: set[asyncio.Task] = set()
+
+
+def _schedule_webhook(url: str, payload: dict) -> None:
+    task = asyncio.create_task(dispatch_webhook(url, payload))
+    _webhook_tasks.add(task)
+    task.add_done_callback(_webhook_tasks.discard)
+
 
 def _get_repo():
     return _get_lead_repo()
@@ -201,7 +213,7 @@ async def submit_lead(
             "form_data": body.form_data,
             "created_at": lead.created_at.isoformat(),
         }
-        asyncio.create_task(dispatch_webhook(webhook_url, payload))
+        _schedule_webhook(webhook_url, payload)
 
     # Step 11: Enqueue enrichment job (skipped for honeypot)
     if not skip_enrich:
