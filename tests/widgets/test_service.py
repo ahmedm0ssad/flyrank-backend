@@ -10,8 +10,10 @@ from app.services import widget_service
 
 @pytest.fixture(autouse=True)
 def mock_repo():
+    from app.dependencies import services
+
     repo = WidgetRepository()
-    widget_service._repo = repo
+    services._widget_repo = repo
     return repo
 
 
@@ -81,11 +83,17 @@ class TestWidgetService:
         assert updated.name == "Updated Name"
 
     async def test_update_widget_invalidates_cache(
-        self, mock_repo, tenant_id, sample_data
+        self, mock_repo, monkeypatch, tenant_id, sample_data
     ):
+        from unittest.mock import MagicMock
+
         _redis_delete = AsyncMock()
-        widget_service._redis_client = AsyncMock()
-        widget_service._redis_client.delete = _redis_delete
+        fake_redis = MagicMock()
+        fake_redis.delete = _redis_delete
+        monkeypatch.setattr(
+            "app.services.widget_service._get_redis_provider",
+            AsyncMock(return_value=fake_redis),
+        )
 
         data = WidgetCreate(**sample_data)
         created = await widget_service.create_widget(data, tenant_id)
@@ -94,8 +102,6 @@ class TestWidgetService:
         await widget_service.update_widget(str(created.id), tenant_id, update_data)
 
         _redis_delete.assert_awaited_once_with(f"widget:config:{created.id}")
-
-        widget_service._redis_client = None
 
     async def test_delete_widget_soft_delete(self, mock_repo, tenant_id, sample_data):
         data = WidgetCreate(**sample_data)

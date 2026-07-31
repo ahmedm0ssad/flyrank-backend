@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 
 from app.dependencies.auth import get_current_user
-from app.dependencies.services import get_lead_repo
+from app.dependencies.services import get_lead_repo, get_widget_repo
 from app.models.lead import (
     BatchDeleteRequest,
     LeadResponse,
@@ -13,6 +13,7 @@ from app.models.lead import (
     PaginatedLeadResponse,
 )
 from app.repositories.lead_repo import LeadRepository
+from app.repositories.protocol import WidgetRepositoryProtocol
 from app.services import lead_service, widget_service
 
 router = APIRouter(prefix="/public/widget", tags=["public-leads"])
@@ -72,10 +73,13 @@ async def list_widget_leads(
     sort_order: str = Query("desc"),
     user: dict = Depends(get_current_user),
     repo: LeadRepository = Depends(get_lead_repo),
+    widget_repo: WidgetRepositoryProtocol = Depends(get_widget_repo),
 ):
     tenant_id = str(user["id"])
 
-    widget = await widget_service.get_widget(str(widget_id), tenant_id)
+    widget = await widget_service.get_widget(
+        str(widget_id), tenant_id, repo=widget_repo
+    )
     if widget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -178,10 +182,13 @@ async def get_widget_stats(
     widget_id: UUID,
     user: dict = Depends(get_current_user),
     repo: LeadRepository = Depends(get_lead_repo),
+    widget_repo: WidgetRepositoryProtocol = Depends(get_widget_repo),
 ):
     tenant_id = str(user["id"])
 
-    widget = await widget_service.get_widget(str(widget_id), tenant_id)
+    widget = await widget_service.get_widget(
+        str(widget_id), tenant_id, repo=widget_repo
+    )
     if widget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -219,10 +226,13 @@ async def export_leads_csv(
     date_to: date | None = Query(None),
     user: dict = Depends(get_current_user),
     repo: LeadRepository = Depends(get_lead_repo),
+    widget_repo: WidgetRepositoryProtocol = Depends(get_widget_repo),
 ):
     tenant_id = str(user["id"])
 
-    widget = await widget_service.get_widget(str(widget_id), tenant_id)
+    widget = await widget_service.get_widget(
+        str(widget_id), tenant_id, repo=widget_repo
+    )
     if widget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -312,10 +322,13 @@ async def re_enrich_lead(
     lead_id: UUID,
     user: dict = Depends(get_current_user),
     repo: LeadRepository = Depends(get_lead_repo),
+    widget_repo: WidgetRepositoryProtocol = Depends(get_widget_repo),
 ):
     tenant_id = str(user["id"])
 
-    widget = await widget_service.get_widget(str(widget_id), tenant_id)
+    widget = await widget_service.get_widget(
+        str(widget_id), tenant_id, repo=widget_repo
+    )
     if widget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
