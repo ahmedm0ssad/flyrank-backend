@@ -62,6 +62,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_anon_key_here
 SUPABASE_SERVICE_KEY=your_service_role_key
 GROQ_API_KEY=your_groq_api_key
+IPINFO_TOKEN=your_ipinfo_token
 PORT=8000
 ```
 
@@ -73,6 +74,7 @@ PORT=8000
 | `SUPABASE_KEY`         | Yes      | Supabase anon/public key                  |
 | `SUPABASE_SERVICE_KEY` | No       | Required only for end-to-end tests        |
 | `GROQ_API_KEY`         | No       | Groq API key (falls back to mock if unset) |
+| `IPINFO_TOKEN`         | No       | ipinfo.io token for lead geo-enrichment   |
 | `PORT`                 | No       | Server port (default: `8000`)             |
 
 ## Running Locally (SQLite)
@@ -329,6 +331,7 @@ app/
         sqlite_repo.py          # SQLite (default)
         postgres_repo.py        # PostgreSQL via asyncpg
         postgres_widget_repo.py # Widget PostgreSQL implementation
+        postgres_lead_repo.py   # Lead PostgreSQL implementation
         widget_repo.py          # Widget in-memory implementation
         lead_repo.py            # Lead in-memory implementation
         scraped_book_repo.py    # ScrapedBook PostgreSQL
