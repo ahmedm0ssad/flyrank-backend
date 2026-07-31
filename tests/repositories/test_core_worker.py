@@ -21,6 +21,7 @@ class TestRunWorker:
         monkeypatch.setattr(
             "app.core.worker.SimpleWorker", lambda q, connection: fake_worker
         )
+        monkeypatch.setattr("app.core.worker.Worker", lambda q, connection: fake_worker)
 
         from app.core.worker import run_worker
 

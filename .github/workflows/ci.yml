@@ -52,7 +52,6 @@ jobs:
             tests/services/ \
             tests/test_main.py \
             tests/test_background_jobs.py \
-            tests/test_db_schema.py \
             tests/test_e2e_widget.py \
             tests/test_lead_worker.py \
             tests/test_report_worker.py \

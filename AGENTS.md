@@ -36,7 +36,6 @@ python -m pytest \
   tests/services/ \
   tests/test_main.py \
   tests/test_background_jobs.py \
-  tests/test_db_schema.py \
   tests/test_e2e_widget.py \
   tests/test_lead_worker.py \
   tests/test_report_worker.py \
@@ -63,6 +62,7 @@ Single-file: `pytest tests/routers/test_ai.py -v` (works for any test path).
 
 - `conftest.py` sets `DATABASE_URL=""` and `REDIS_URL=""`, patches all `is_postgres_enabled` calls to `False`, and installs `_FakeRedis` + `_FakeQueue`. Tests are fully offline.
 - `pyproject.toml`: `asyncio_mode = "auto"`.
+- `tests/test_db_schema.py` is **ignored on pytest** (`addopts --ignore` in `pyproject.toml`) — needs a live Postgres. Run it explicitly (`pytest tests/test_db_schema.py`) against a running `db` service.
 - E2E tests (`test_e2e.py`, `test_ai_e2e.py`) are **always excluded from CI** — need real Supabase/Redis/server.
 
 ## Framework quirks

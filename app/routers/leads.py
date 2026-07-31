@@ -1,8 +1,10 @@
+import inspect
 from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
+from fastapi.routing import APIRoute
 
 from app.dependencies.auth import get_current_user
 from app.dependencies.services import get_lead_repo, get_widget_repo
@@ -20,12 +22,19 @@ router = APIRouter(prefix="/public/widget", tags=["public-leads"])
 dashboard_router = APIRouter(prefix="/widgets", tags=["leads"])
 cross_router = APIRouter(prefix="/leads", tags=["leads"])
 
+_STRICT_CONTENT_TYPE_KWARGS = (
+    {"strict_content_type": False}
+    if "strict_content_type" in inspect.signature(APIRoute.__init__).parameters
+    else {}
+)
+
 
 @router.post(
     "/{widget_id}/submit",
     status_code=status.HTTP_201_CREATED,
     summary="Submit a lead",
     description="Accepts a public widget form submission. Validates origin, rate limits, honeypot, fingerprint dedup, and spam score before storing the lead, then enqueues enrichment and dispatches any configured webhook asynchronously. Returns 201 with the new lead_id.",
+    **_STRICT_CONTENT_TYPE_KWARGS,
 )
 async def submit_lead(
     widget_id: UUID,
