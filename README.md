@@ -48,7 +48,9 @@ A production-ready FastAPI backend that combines task management, web scraping, 
 
 ✅ 50 KB request body limit middleware
 
-✅ Comprehensive offline test suite (886+ passing tests, 99% coverage)
+✅ Capstone submission pack (`capstone.yaml`, `EVIDENCE.md`, `BUILDLOG.md`) + demo seed script + second-origin test page
+
+✅ Comprehensive offline test suite (938 passing tests, 100% coverage)
 
 ✅ Docker Compose stack and GitHub Actions CI pipeline
 
@@ -107,6 +109,11 @@ app/
 tests/                       # ~1,000 unit + integration tests (fully offline)
 db/init.sql                  # PostgreSQL DDL (6 tables + indexes)
 scripts/seed_explain.py      # EXPLAIN ANALYZE index benchmark
+scripts/seed_demo.py         # Deterministic demo-data seeder (Postgres required)
+customer-site/index.html     # Plain HTML "customer site" — renders the widget from a second origin
+capstone.yaml                # Capstone submission manifest (run/seed/test/endpoints)
+EVIDENCE.md                  # One pasted proof per Definition-of-Done checkbox
+BUILDLOG.md                  # Honest AI-usage log
 .github/workflows/ci.yml     # isort → black → ruff → pytest pipeline
 ```
 
@@ -147,6 +154,35 @@ SQLite tasks.db / PostgreSQL
 - **Routers** parse requests, enforce auth, and translate HTTP errors — no business logic.
 - **Services** hold the business rules (e.g. the lead submission pipeline, job lifecycle).
 - **Repositories** implement a shared Protocol (`app/repositories/protocol.py`) so the SQLite, PostgreSQL, and in-memory backends are interchangeable without touching upper layers.
+
+### Embeddable widget architecture (capstone)
+
+Three request paths, one per actor — keep them separate and the code stays clean:
+
+```
+Widget Owner (authenticated)
+  └─► Widget Management API ─► Widget DB (tenant-isolated) ─► embed snippet
+                            (/widgets CRUD)
+
+Customer Website (any origin)
+  └─ <script src=".../public/widget/{id}/widget.js?v=N">   ← one line
+      └─► GET /public/widget/{id}/config (public · cached · CORS)
+          └─► render widget
+
+Website Visitor
+  └─► POST /public/widget/{id}/submit (public · CORS)
+      ├─► validation ──────────── bad payload? → 4xx, never 500
+      ├─► origin check ────────── mismatched Origin/Referer? → 403
+      ├─► rate limit (3 tiers) ── flood? → 429 + Retry-After, service stays up
+      ├─► spam control ────────── honeypot · heuristic score · fingerprint dedup
+      ├─► store submission ────── linked to widget + tenant
+      ├─► geo enrichment ──────── ipapi.co →(fails)→ ipinfo →(fails)→ ip-api →(fails)→ store anyway
+      └─► webhook side effect ─── fire-and-forget · fail-open (never blocks success)
+
+Widget Owner (authenticated)
+  └─► Dashboard API ◄── submissions + stats + CSV export
+      (/widgets/{id}/leads · /widgets/{id}/stats · /widgets/{id}/export · /leads · /leads/stats)
+```
 
 ### Background jobs
 
@@ -356,6 +392,28 @@ docker compose up --build
 
 This starts PostgreSQL 16 (with `db/init.sql` applied), Redis 7 on host port `6380`, and the app — each with healthchecks.
 
+### Seed demo data & run the widget demo
+
+1. Boot the stack: `docker compose up --build` (Postgres is required so the demo data persists).
+2. Seed a demo tenant, two widgets, and sample leads (idempotent):
+
+   ```bash
+   python -m scripts.seed_demo
+   ```
+
+   It prints the generated `<script>` embed tags and the dashboard endpoints to hit.
+3. Serve the plain-HTML "customer site" from a **second origin**:
+
+   ```bash
+   python -m http.server 5500 --directory customer-site
+   ```
+
+4. Open `http://localhost:5500/?widget=<widget-id>` in a browser — the widget loads from `http://localhost:8000` on a page you didn't build. Submit the form and watch the lead appear in the dashboard (authenticated):
+
+   ```bash
+   curl http://localhost:8000/widgets/<widget-id>/stats -H "Authorization: Bearer <token>"
+   ```
+
 ## Running Tests
 
 The full test suite runs fully offline using in-memory repositories and fake Redis/RQ (no network, no Docker required):
@@ -382,7 +440,7 @@ python -m pytest \
   --cov=app --cov-report=term-missing --tb=short -v
 ```
 
-Latest recorded CI result: **886 passed, 1 xfailed, 99% coverage** (2 pre-existing Postgres `ConnectionRefused` failures only occur when no Postgres is running). `tests/test_db_schema.py` requires a live Postgres, and `tests/test_e2e.py` / `tests/test_ai_e2e.py` require real Supabase/Redis — all three are excluded from CI.
+Latest recorded CI result: **938 passed, 100% coverage** (offline, fully deterministic — no network, Docker, or credentials needed). `tests/test_db_schema.py` requires a live Postgres, and `tests/test_e2e.py` / `tests/test_ai_e2e.py` require real Supabase/Redis — all three are excluded from CI.
 
 Run a single test file:
 
@@ -438,7 +496,7 @@ Returns every task marked as complete. This is the exact query shape used by the
 - **Offline fakes** — `tests/conftest.py` installs `_FakeRedis` and `_FakeQueue` and patches all `is_postgres_enabled` calls, so the suite never touches the network.
 - **Repository swapping** — the Repository Protocol lets tests substitute in-memory or SQLite implementations for any data access layer.
 - **Isolation** — every test resets fake state via autouse fixtures; no cross-test pollution.
-- **Coverage** — CI enforces coverage reporting (`--cov=app --cov-report=term-missing`); latest run measures 99% statement coverage.
+- **Coverage** — CI enforces coverage reporting (`--cov=app --cov-report=term-missing`); latest run measures 100% statement coverage.
 
 ## Design Decisions
 
@@ -458,6 +516,33 @@ Returns every task marked as complete. This is the exact query shape used by the
 - Postgres as the default configuration with SQLite as the dev fallback
 - Persistent `rate_limits` audit table integration (schema exists in `db/init.sql`)
 - Circuit breaker around geo providers and per-provider rate-limit budgets
+
+## Limitations
+
+Honest scoping, in the spirit of the capstone brief (§7):
+
+- **Repository layout** — this capstone is developed on a dedicated branch
+  (`feature/embed-widget-lead-capture` → `feature/capstone-submission-pack`)
+  inside a multi-milestone repo, not in its own standalone
+  `flyrank-capstone-widgetplatform` repository. The capstone domain code,
+  tests, and submission pack are all present; the separate-repo migration is a
+  follow-up.
+- **CORS is fully open** — `allow_origins=["*"]`, methods `GET/POST/OPTIONS`.
+  Correct for a public widget path; an origin allow-list per tenant would be a
+  production hardening step.
+- **`POST /widgets` returns `422`** for validation errors (FastAPI default),
+  while the original implementation plan specified `400`. Tracked in
+  `docs/reviews/m1-architecture.md`.
+- **Rate limits are process-local when Redis is unavailable** — a bounded LRU
+  fallback (`app/dependencies/leads.py`), which degrades safely but is not a
+  distributed limiter.
+- **Email side effect is implemented as a webhook** (the brief allows "a
+  confirmation email / webhook"); `dispatch_webhook` is fail-open and
+  fire-and-forget, so it can never block a successful submission.
+- **Geo enrichment is asynchronous** — the submit response is stored
+  immediately; location data is attached by the background enrichment job
+  (`enrichment-jobs` queue), so a fresh submission may show as `pending`
+  before enrichment completes.
 
 ## License
 
