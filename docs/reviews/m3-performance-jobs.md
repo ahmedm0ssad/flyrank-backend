@@ -39,8 +39,8 @@
 
 | File:Line | Description | Tier | Reasoning |
 |-----------|-------------|------|-----------|
-| `app/repositories/lead_repo.py:177-179` | `batch_delete` calls `self.delete()` per lead in a loop | C | In-memory implementation performs N individual deletes. A Postgres-backed version should use `DELETE WHERE id = ANY($1)` for a single round trip. In-memory repo makes this invisible until Postgres adapter is written. |
-| `app/repositories/lead_repo.py` | No Postgres-backed `LeadRepository` exists | C | Only in-memory implementation exists. All performance concerns (N+1, index usage, query plans) are unverifiable against real Postgres. Plan §3 specifies dual SQLite/Postgres pattern (as in `report_repo.py`), but leads only have in-memory storage. |
+| `app/repositories/lead_repo.py:177-179` | `batch_delete` calls `self.delete()` per lead in a loop | C | In-memory implementation performs N individual deletes. A Postgres-backed version should use `DELETE WHERE id = ANY($1)` for a single round trip. In-memory repo makes this invisible until Postgres adapter is written. | **Fixed in M23** (commit `c95b4a7`). `PostgresLeadRepository.batch_delete` uses a single `DELETE ... WHERE id = ANY($1::uuid[]) AND widget_id = $2 AND tenant_id = $3` returning the deleted count. |
+| `app/repositories/lead_repo.py` | No Postgres-backed `LeadRepository` exists | C | Only in-memory implementation exists. All performance concerns (N+1, index usage, query plans) are unverifiable against real Postgres. Plan §3 specifies dual SQLite/Postgres pattern (as in `report_repo.py`), but leads only have in-memory storage. | **Fixed in M23** (commit `c95b4a7`). `app/repositories/postgres_lead_repo.py` now provides the full `LeadRepositoryProtocol` surface (create, get_by_id, list_by_widget/tenant, stats, export, update_status, delete, batch_delete). Wired via `get_lead_repo()` DI and `lead_worker._get_worker_repo()` when `is_postgres_enabled()`. |
 
 ---
 
