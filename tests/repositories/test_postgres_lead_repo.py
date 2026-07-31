@@ -118,6 +118,90 @@ class TestPostgresLeadRepository:
             assert result is None
 
     @pytest.mark.asyncio
+    async def test_string_json_columns_are_parsed(self, repo, mock_pool):
+        pool, conn = mock_pool
+        conn.fetchrow.return_value = _make_row(
+            form_data='{"name": "Ada Lovelace"}',
+            spam_reasons='["honeypot"]',
+        )
+        with patch(
+            "app.repositories.postgres_lead_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            result = await repo.get_by_id("00000000-0000-0000-0000-000000000001")
+            assert result.form_data == {"name": "Ada Lovelace"}
+            assert result.spam_reasons == ["honeypot"]
+
+    @pytest.mark.asyncio
+    async def test_list_by_widget_applies_all_filters(self, repo, mock_pool):
+        pool, conn = mock_pool
+        conn.fetchval.return_value = 1
+        conn.fetch.return_value = [_make_row()]
+        date_from = datetime(2026, 7, 1).date()
+        date_to = datetime(2026, 7, 31).date()
+        with patch(
+            "app.repositories.postgres_lead_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            items, total = await repo.list_by_widget(
+                widget_id="00000000-0000-0000-0000-000000000010",
+                tenant_id="00000000-0000-0000-0000-000000000002",
+                include_honeypot=True,
+                search="ada",
+                status="enriched",
+                spam_min=0.0,
+                spam_max=0.9,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            assert total == 1
+            assert len(items) == 1
+            query = conn.fetch.await_args.args[0]
+            assert "honeypot_triggered = FALSE" not in query
+            assert "ILIKE" in query
+            assert "status = $4" in query
+            assert "spam_score >= $5" in query
+            assert "spam_score <= $6" in query
+            assert "created_at >= $7" in query
+            assert "created_at <= $8" in query
+
+    @pytest.mark.asyncio
+    async def test_list_by_tenant_applies_honeypot_filter_by_default(self, repo, mock_pool):
+        pool, conn = mock_pool
+        conn.fetchval.return_value = 0
+        conn.fetch.return_value = []
+        with patch(
+            "app.repositories.postgres_lead_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            await repo.list_by_tenant(
+                tenant_id="00000000-0000-0000-0000-000000000002"
+            )
+            query = conn.fetch.await_args.args[0]
+            assert "honeypot_triggered = FALSE" in query
+
+    @pytest.mark.asyncio
+    async def test_get_export_data_with_date_filters(self, repo, mock_pool):
+        pool, conn = mock_pool
+        conn.fetch.return_value = [_make_row()]
+        date_from = datetime(2026, 7, 1).date()
+        date_to = datetime(2026, 7, 31).date()
+        with patch(
+            "app.repositories.postgres_lead_repo.get_pool",
+            AsyncMock(return_value=pool),
+        ):
+            rows = await repo.get_export_data(
+                widget_id="00000000-0000-0000-0000-000000000010",
+                tenant_id="00000000-0000-0000-0000-000000000002",
+                date_from=date_from,
+                date_to=date_to,
+            )
+            assert len(rows) == 1
+            query = conn.fetch.await_args.args[0]
+            assert "created_at >= $3" in query
+            assert "created_at <= $4" in query
+
+    @pytest.mark.asyncio
     async def test_list_by_widget_returns_items_and_count(self, repo, mock_pool):
         pool, conn = mock_pool
         conn.fetchval.return_value = 1
