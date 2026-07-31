@@ -1,10 +1,12 @@
-import inspect
+import email.message
+import json
 from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import PlainTextResponse
-from fastapi.routing import APIRoute
+from pydantic import ValidationError
 
 from app.dependencies.auth import get_current_user
 from app.dependencies.services import get_lead_repo, get_widget_repo
@@ -22,11 +24,56 @@ router = APIRouter(prefix="/public/widget", tags=["public-leads"])
 dashboard_router = APIRouter(prefix="/widgets", tags=["leads"])
 cross_router = APIRouter(prefix="/leads", tags=["leads"])
 
-_STRICT_CONTENT_TYPE_KWARGS = (
-    {"strict_content_type": False}
-    if "strict_content_type" in inspect.signature(APIRoute.__init__).parameters
-    else {}
-)
+
+async def _parse_submit_body(request: Request) -> LeadSubmit:
+    raw = await request.body()
+    if not raw:
+        raise RequestValidationError(
+            [
+                {
+                    "type": "missing",
+                    "loc": ("body",),
+                    "msg": "Request body is required",
+                    "input": None,
+                }
+            ]
+        )
+    content_type = request.headers.get("content-type", "")
+    if content_type:
+        message = email.message.Message()
+        message["content-type"] = content_type
+        subtype = message.get_content_subtype()
+        if message.get_content_maintype() != "application" or not (
+            subtype == "json" or subtype.endswith("+json")
+        ):
+            raise RequestValidationError(
+                [
+                    {
+                        "type": "content_type",
+                        "loc": ("header", "content-type"),
+                        "msg": "Request body must be application/json",
+                        "input": content_type,
+                    }
+                ]
+            )
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RequestValidationError(
+            [
+                {
+                    "type": "json_invalid",
+                    "loc": ("body", exc.pos),
+                    "msg": "JSON decode error",
+                    "input": {},
+                    "ctx": {"error": exc.msg},
+                }
+            ]
+        ) from exc
+    try:
+        return LeadSubmit.model_validate(payload)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
 
 
 @router.post(
@@ -34,14 +81,19 @@ _STRICT_CONTENT_TYPE_KWARGS = (
     status_code=status.HTTP_201_CREATED,
     summary="Submit a lead",
     description="Accepts a public widget form submission. Validates origin, rate limits, honeypot, fingerprint dedup, and spam score before storing the lead, then enqueues enrichment and dispatches any configured webhook asynchronously. Returns 201 with the new lead_id.",
-    **_STRICT_CONTENT_TYPE_KWARGS,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": LeadSubmit.model_json_schema()}},
+        },
+    },
 )
 async def submit_lead(
     widget_id: UUID,
-    body: LeadSubmit,
     request: Request,
     repo: LeadRepository = Depends(get_lead_repo),
 ):
+    body = await _parse_submit_body(request)
     lead, _ = await lead_service.submit_lead(str(widget_id), body, request, repo=repo)
 
     return {
