@@ -57,7 +57,7 @@ Copy `.env.example` to `.env` and configure:
 
 ```env
 DATABASE_URL=postgresql://user:password@host:5432/dbname
-REDIS_URL=redis://host:6379/0
+REDIS_URL=redis://host:6380/0
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_anon_key_here
 SUPABASE_SERVICE_KEY=your_service_role_key
@@ -94,8 +94,8 @@ docker compose up --build
 Background jobs require a running Redis instance and a worker process:
 
 ```bash
-# Terminal 1: start Redis
-docker run -d -p 6379:6379 redis:7-alpine
+# Terminal 1: start Redis (host port 6380 - matches the Compose stack)
+docker run -d -p 6380:6379 redis:7-alpine
 
 # Terminal 2: start the worker
 python -m app.core.worker
@@ -157,6 +157,38 @@ uvicorn app.main:app --port 8000
 | GET    | `/reports/{job_id}`                     | No   | Poll report status and metadata    |
 | GET    | `/reports/files/{filename}`             | No   | Download a generated PDF file      |
 
+### Widgets
+
+| Method | Path           | Auth   | Description                 |
+|--------|----------------|--------|-----------------------------|
+| GET    | `/widgets`     | Bearer | List widgets (`?search=&active=&page=&page_size=`) |
+| POST   | `/widgets`     | Bearer | Create a widget              |
+| GET    | `/widgets/{id}`| Bearer | Get a widget by ID           |
+| PUT    | `/widgets/{id}`| Bearer | Update a widget              |
+| DELETE | `/widgets/{id}`| Bearer | Delete a widget              |
+
+### Widget Embedding
+
+| Method | Path                              | Auth | Description                         |
+|--------|-----------------------------------|------|-------------------------------------|
+| GET    | `/public/widget/{id}/config`      | No   | Public widget config (JSON)         |
+| GET    | `/public/widget/{id}/widget.js`   | No   | Embeddable widget JS bundle         |
+| POST   | `/public/widget/{id}/submit`      | No   | Submit a lead from the widget       |
+
+### Leads
+
+| Method | Path                                      | Auth   | Description                         |
+|--------|-------------------------------------------|--------|-------------------------------------|
+| GET    | `/widgets/{id}/leads`                     | Bearer | List leads for a widget (filters/pagination) |
+| GET    | `/widgets/{id}/leads/{lead_id}`           | Bearer | Get a single lead                   |
+| GET    | `/widgets/{id}/stats`                     | Bearer | Lead statistics for a widget        |
+| GET    | `/widgets/{id}/export`                    | Bearer | Export widget leads as CSV          |
+| DELETE | `/widgets/{id}/leads/{lead_id}`           | Bearer | Delete a lead                       |
+| POST   | `/widgets/{id}/leads/batch-delete`        | Bearer | Batch delete leads                  |
+| POST   | `/widgets/{id}/leads/{lead_id}/re-enrich` | Bearer | Re-run enrichment for a lead        |
+| GET    | `/leads`                                  | Bearer | List leads across all widgets       |
+| GET    | `/leads/stats`                            | Bearer | Global lead statistics              |
+
 ## AI Background Jobs — Architecture
 
 AI inference is processed asynchronously via RQ (Redis Queue), with a dedicated worker process consuming jobs from the `ai-jobs` queue.
@@ -208,19 +240,72 @@ Same three-tier backoff as AI jobs: 10s → 60s → 300s.
 
 PDFs are served via `GET /reports/files/{filename}` with path-traversal protection and filename validation. Only files within the `generated_reports/` directory can be downloaded.
 
+## Widget & Lead Capture — Architecture
+
+Widgets are embedded on third-party sites and load a JS bundle (`/public/widget/{id}/widget.js`) that renders a configurable form (`/public/widget/{id}/config`). Submissions go through a validation and anti-abuse pipeline before the lead is stored; enrichment and a confirmation webhook run asynchronously afterwards.
+
+### Submission Pipeline
+
+1. Visitor submits the widget form → `POST /public/widget/{id}/submit`
+2. API looks up the widget and rejects unknown or inactive widgets (`404`)
+3. Origin validation checks the `Origin`/`Referer` header against the widget's configured domain — rejected requests return `403`
+4. Rate limiting checks the visitor across three tiers (per-IP, per-widget-IP, per-widget-global) in a 60s window and returns `429` with a `Retry-After` header when exceeded
+5. A hidden honeypot field, if filled in, records the lead as spam (score `1.0`) and skips enrichment and webhook dispatch
+6. A visitor fingerprint is computed and compared against previously seen submissions — duplicates return the existing lead instead of creating a new one
+7. Legitimate submissions are spam-scored, then stored as a lead
+8. An enrichment job is enqueued (async): a worker resolves IP geolocation and updates the lead
+9. A confirmation webhook is dispatched (async, fire-and-forget) to the widget's configured `webhook_url` — it never blocks or fails the submission
+10. The `201` response returns the new `lead_id`; the lead is immediately visible in the dashboard
+
+```mermaid
+flowchart TD
+    A[Visitor submits form] --> B[POST /public/widget/:id/submit]
+    B --> C{Widget active?}
+    C -- no --> C404[404 Widget not found]
+    C -- yes --> D{Origin allowed?}
+    D -- no --> D403[403 Origin rejected]
+    D -- yes --> E{Rate limit ok?}
+    E -- no --> E429[429 Retry-After]
+    E -- yes --> F{Honeypot filled?}
+    F -- yes --> H[Mark spam score 1.0]
+    F -- no --> G{Duplicate fingerprint?}
+    G -- yes --> G2[Return existing lead]
+    G -- no --> I[Spam score submission]
+    H --> J[Store lead]
+    G2 --> J
+    I --> J
+    J --> K[Enqueue enrichment job]
+    J --> L[Dispatch webhook fire-and-forget]
+    J --> M[201 lead_id returned]
+    K --> N[Worker: geo enrichment updates lead]
+    M --> O[Visible in dashboard list / stats / export]
+    N --> O
+```
+
+### Webhook
+
+When a widget's config sets a `webhook_url`, a POST with `{lead_id, widget_id, form_data, created_at}` is fired after each legitimate submission. Dispatch is asynchronous and fail-open: timeouts and provider errors are logged, never raised, so a webhook outage cannot turn a successful submission into an error.
+
 ## Project Structure
 
 ```
 app/
     main.py                     # FastAPI app, lifespan, router mounting
-    database.py                 # asyncpg connection pool
-    supabase_client.py          # Supabase async client singleton
-    queue.py                    # Redis connection, RQ queue, job CRUD
-    worker.py                   # Standalone RQ worker entry point
+    core/
+        database.py             # asyncpg pool (Postgres) / sqlite3 (default)
+        queue.py                # Redis connection, RQ queue, job CRUD
+        supabase.py             # Supabase admin client
+        worker.py               # Standalone RQ worker entry point
     dependencies/
         auth.py                 # Bearer token dependency
+        embed.py                # Widget origin validation
+        leads.py                # Rate limiting dependencies
+        services.py             # DI providers (get_lead_repo, get_widget_repo, get_redis)
+    middleware/
+        body_limit.py           # 50KB request body size limit
     models/
         task.py, auth.py, scraped_book.py, job.py, report.py
+        lead.py, widget.py
     services/
         task_service.py         # Task business logic
         scraped_book_service.py # Scrape orchestration
@@ -230,11 +315,22 @@ app/
         report_worker.py        # RQ worker function for PDF generation
         pdf_generator.py        # ReportLab PDF document builder
         alert.py                # Failure alert stub
+        embed_service.py        # Public widget config/JS lookup
+        widget_service.py       # Widget CRUD business logic
+        widget_js.py            # Widget JS bundle renderer
+        lead_service.py         # Lead submission pipeline, stats, export
+        lead_worker.py          # RQ worker for lead enrichment
+        spam_service.py         # Spam scoring
+        fingerprint_service.py  # Fingerprint computation + dedup
+        geo_service.py          # IP geolocation enrichment (ipapi.co/ipinfo/ip-api)
+        webhook_service.py      # Fail-open webhook dispatch
     repositories/
-        protocol.py             # TaskRepository Protocol
+        protocol.py             # Repository Protocols
         sqlite_repo.py          # SQLite (default)
         postgres_repo.py        # PostgreSQL via asyncpg
-        inmemory_repo.py        # In-memory fallback
+        postgres_widget_repo.py # Widget PostgreSQL implementation
+        widget_repo.py          # Widget in-memory implementation
+        lead_repo.py            # Lead in-memory implementation
         scraped_book_repo.py    # ScrapedBook PostgreSQL
         report_repo.py          # Report CRUD (SQLite + PostgreSQL)
     routers/
@@ -243,10 +339,13 @@ app/
         scrape.py               # Scrape trigger
         ai.py                   # AI job enqueue + status
         reports.py              # Report enqueue, status, download
+        widgets.py              # Widget CRUD
+        embed.py                # Public widget config + JS
+        leads.py                # Lead submission + dashboard + cross-widget
     scrapers/
         session.py, parser.py, cleaner.py, pipeline.py
 db/
-    init.sql                    # PostgreSQL DDL (tasks + scraped_books)
+    init.sql                    # PostgreSQL DDL (tasks, scraped_books, reports, widgets, leads, rate_limits)
 scripts/
     seed_explain.py             # EXPLAIN ANALYZE index benchmark
 .github/
