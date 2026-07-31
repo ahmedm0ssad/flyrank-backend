@@ -15,6 +15,27 @@ class TestGetClientCredentials:
 
 
 class TestModuleInit:
+    def test_sys_exit_in_process_when_env_missing(self, tmp_path, monkeypatch):
+        import importlib
+
+        import app.core.supabase as supabase_module
+
+        monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_KEY", raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(SystemExit):
+            importlib.reload(supabase_module)
+
+        monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "test-anon-key")
+        importlib.reload(supabase_module)
+        assert supabase_module.get_client_credentials() == (
+            "https://test.supabase.co",
+            "test-anon-key",
+        )
+
     def test_sys_exit_when_url_missing(self, tmp_path, monkeypatch):
         import os
         import subprocess

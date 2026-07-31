@@ -64,6 +64,9 @@ class TestCleanAvailability:
     def test_returns_none_for_none(self):
         assert _clean_availability(None) is None
 
+    def test_returns_none_for_whitespace_only(self):
+        assert _clean_availability("   ") is None
+
     def test_normalizes_whitespace(self):
         assert _clean_availability("  In   stock  ") == "In Stock"
 

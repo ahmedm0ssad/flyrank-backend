@@ -80,6 +80,13 @@ class TestDownloadReport:
         response = client.get("/reports/files/test..pdf")
         assert response.status_code == 400
 
+    def test_download_reports_dir_prefix_mismatch_400(
+        self, client: TestClient, monkeypatch
+    ):
+        monkeypatch.setattr("app.routers.reports.REPORTS_DIR", ".")
+        response = client.get("/reports/files/report_test.pdf")
+        assert response.status_code == 400
+
     def test_download_successful_200(self, client: TestClient, tmp_path, monkeypatch):
         reports_dir = tmp_path / "generated_reports"
         reports_dir.mkdir()

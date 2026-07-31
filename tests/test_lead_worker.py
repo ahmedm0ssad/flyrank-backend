@@ -5,6 +5,15 @@ import pytest
 from app.models.job import JobStatus
 
 
+class TestGetWorkerRepo:
+    def test_returns_postgres_repo_when_enabled(self, monkeypatch):
+        from app.repositories.postgres_lead_repo import PostgresLeadRepository
+        from app.services.lead_worker import _get_worker_repo
+
+        monkeypatch.setattr("app.core.database.is_postgres_enabled", lambda: True)
+        assert isinstance(_get_worker_repo(), PostgresLeadRepository)
+
+
 class TestRunEnrichmentJob:
     def test_successful_enrichment(self, monkeypatch):
         mock_job = MagicMock()
@@ -320,6 +329,48 @@ class TestRunEnrichmentJob:
         assert len(lead_updates) > 0
         last_lead_update = lead_updates[-1]
         assert last_lead_update["status"] == "failed"
+
+    def test_update_status_raise_swallowed_on_final_failure(self, monkeypatch):
+        mock_job = MagicMock()
+        mock_job.id = "test-enrich-11"
+        mock_job.meta = {"max_retries": 3, "current_attempt": 3}
+        mock_job.retries_left = 0
+        mock_job.save_meta = MagicMock()
+
+        monkeypatch.setattr(
+            "app.services.lead_worker.get_current_job", lambda: mock_job
+        )
+        monkeypatch.setattr(
+            "app.services.lead_worker.update_enrichment_job", MagicMock()
+        )
+
+        fake_lead = MagicMock()
+        fake_lead.status = "pending"
+        fake_lead.ip_address = "8.8.8.8"
+
+        async def mock_get_by_id(self, lead_id):
+            return fake_lead
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.get_by_id",
+            mock_get_by_id,
+        )
+        monkeypatch.setattr("app.services.lead_worker.geo_enrich", lambda ip: None)
+
+        async def mock_update_status_raise(self, lead_id, status, **kw):
+            raise RuntimeError("db down")
+
+        monkeypatch.setattr(
+            "app.repositories.lead_repo.LeadRepository.update_status",
+            mock_update_status_raise,
+        )
+        monkeypatch.setattr("app.services.lead_worker.send_alert", MagicMock())
+        monkeypatch.setattr("app.services.lead_worker.logger", MagicMock())
+
+        from app.services.lead_worker import run_enrichment_job
+
+        with pytest.raises(RuntimeError):
+            run_enrichment_job("lead-1")
 
     def test_lead_not_found_raises_value_error(self, monkeypatch):
         mock_job = MagicMock()
