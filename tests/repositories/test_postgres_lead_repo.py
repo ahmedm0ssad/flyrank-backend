@@ -137,8 +137,8 @@ class TestPostgresLeadRepository:
         pool, conn = mock_pool
         conn.fetchval.return_value = 1
         conn.fetch.return_value = [_make_row()]
-        date_from = datetime(2026, 7, 1).date()
-        date_to = datetime(2026, 7, 31).date()
+        date_from = datetime(2026, 7, 1, tzinfo=timezone.utc).date()
+        date_to = datetime(2026, 7, 31, tzinfo=timezone.utc).date()
         with patch(
             "app.repositories.postgres_lead_repo.get_pool",
             AsyncMock(return_value=pool),
@@ -166,7 +166,9 @@ class TestPostgresLeadRepository:
             assert "created_at <= $8" in query
 
     @pytest.mark.asyncio
-    async def test_list_by_tenant_applies_honeypot_filter_by_default(self, repo, mock_pool):
+    async def test_list_by_tenant_applies_honeypot_filter_by_default(
+        self, repo, mock_pool
+    ):
         pool, conn = mock_pool
         conn.fetchval.return_value = 0
         conn.fetch.return_value = []
@@ -174,9 +176,7 @@ class TestPostgresLeadRepository:
             "app.repositories.postgres_lead_repo.get_pool",
             AsyncMock(return_value=pool),
         ):
-            await repo.list_by_tenant(
-                tenant_id="00000000-0000-0000-0000-000000000002"
-            )
+            await repo.list_by_tenant(tenant_id="00000000-0000-0000-0000-000000000002")
             query = conn.fetch.await_args.args[0]
             assert "honeypot_triggered = FALSE" in query
 
@@ -184,8 +184,8 @@ class TestPostgresLeadRepository:
     async def test_get_export_data_with_date_filters(self, repo, mock_pool):
         pool, conn = mock_pool
         conn.fetch.return_value = [_make_row()]
-        date_from = datetime(2026, 7, 1).date()
-        date_to = datetime(2026, 7, 31).date()
+        date_from = datetime(2026, 7, 1, tzinfo=timezone.utc).date()
+        date_to = datetime(2026, 7, 31, tzinfo=timezone.utc).date()
         with patch(
             "app.repositories.postgres_lead_repo.get_pool",
             AsyncMock(return_value=pool),

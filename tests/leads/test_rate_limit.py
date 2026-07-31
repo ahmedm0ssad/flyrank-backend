@@ -158,9 +158,7 @@ class TestInProcessLimitBounding:
     @pytest.mark.asyncio
     async def test_fails_open_and_bounded(self, monkeypatch):
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
-        monkeypatch.setattr(
-            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
-        )
+        monkeypatch.setattr("app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12)
 
         bound = 12
         for i in range(bound * 3):
@@ -173,9 +171,7 @@ class TestInProcessLimitBounding:
         """An IP that starts fresh after eviction still builds up to the
         limit correctly (no ghost state from pre-eviction keys)."""
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
-        monkeypatch.setattr(
-            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
-        )
+        monkeypatch.setattr("app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12)
 
         for i in range(12 * 3):
             await check_rate_limits(f"ip-{i}", "widget-1")
@@ -192,9 +188,7 @@ class TestInProcessLimitBounding:
         bound. The most recently accessed per-widget limit key survives
         LRU eviction, so the victim stays blocked."""
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
-        monkeypatch.setattr(
-            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
-        )
+        monkeypatch.setattr("app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12)
 
         for i in range(3):
             await check_rate_limits(f"filler-{i}", f"fw-{i}")
@@ -223,19 +217,17 @@ class TestInProcessLimitBounding:
         to end via move_to_end), then flood past bound — A survives
         because it was recently touched, not because of creation order."""
         monkeypatch.setattr("app.dependencies.leads._get_redis", lambda: None)
-        monkeypatch.setattr(
-            "app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12
-        )
+        monkeypatch.setattr("app.dependencies.leads._MAX_IN_PROCESS_KEYS", 12)
 
         # 1. Create key A early (3 keys)
-        await check_rate_limits("victim", "w-v")         # count = 1
+        await check_rate_limits("victim", "w-v")  # count = 1
 
         # 2. Fill to bound with 3 other callers (9 keys) → total 12
         for i in range(3):
             await check_rate_limits(f"f-{i}", f"wf-{i}")
 
         # 3. Access A again — move_to_end protects it
-        await check_rate_limits("victim", "w-v")         # count = 2
+        await check_rate_limits("victim", "w-v")  # count = 2
 
         # 4. Flood past bound with 2 more callers → eviction
         for i in range(2):

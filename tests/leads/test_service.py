@@ -167,8 +167,8 @@ class TestSubmitLead:
 class TestReEnrichLead:
     @pytest.mark.asyncio
     async def test_race_redis_key_blocks_despite_failed_status(self, created_widget):
-        from tests.conftest import _fake_redis
         from app.core.queue import create_enrichment_job
+        from tests.conftest import _fake_redis
 
         widget_id = str(created_widget.id)
         from app.services import widget_service
@@ -198,7 +198,6 @@ class TestReEnrichLead:
 
     @pytest.mark.asyncio
     async def test_202_with_no_active_key_and_failed_status(self, created_widget):
-        from app.core.queue import clear_enrichment_active
 
         widget_id = str(created_widget.id)
         from app.services import widget_service
@@ -227,8 +226,8 @@ class TestReEnrichLead:
 
     @pytest.mark.asyncio
     async def test_redis_key_cleared_worker_reenrich_succeeds(self, created_widget):
+        from app.core.queue import clear_enrichment_active, create_enrichment_job
         from tests.conftest import _fake_redis
-        from app.core.queue import create_enrichment_job, clear_enrichment_active
 
         widget_id = str(created_widget.id)
         from app.services import widget_service
