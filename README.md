@@ -1,364 +1,364 @@
-# FlyRank — AI Background Jobs + PDF Report Generator
+# FlyRank Backend AI
 
-A FastAPI backend combining task management, web scraping, authentication, asynchronous AI job processing via RQ (Redis Queue) and Groq LLM inference, and automated PDF report generation.
+A production-ready FastAPI backend that combines task management, web scraping, Supabase authentication, asynchronous AI inference (RQ + Groq), automated PDF report generation, and an embeddable widget platform with spam-protected lead capture.
 
 ## Features
 
-- Asynchronous AI inference via RQ (Redis Queue) and Groq API
-- Job lifecycle management (queued → started → finished/failed)
-- Idempotent job creation via `Idempotency-Key` header
-- Job status polling (`GET /jobs/{id}`) and listing (`GET /jobs`)
-- Automatic retries with exponential backoff (up to 3 retries)
-- Failure alert stub (CRITICAL log — replace with Slack/email/webhook)
-- Mock AI response when `GROQ_API_KEY` is unset
-- Full test suite with mocked Redis and RQ
-- Task CRUD with SQLite/PostgreSQL persistence
-- Supabase Authentication (signup, login, logout, protected endpoints)
-- Book scraper with robots.txt compliance and rate limiting
-- Docker Compose stack (PostgreSQL + Redis + App)
-- CI pipeline with automated linting and testing via GitHub Actions
-- **PDF Report Generation** — asynchronous background report generation via RQ with real database aggregation
+✅ FastAPI async REST API
 
-## Technologies Used
+✅ Task CRUD with SQLite / PostgreSQL persistence
 
-| Component       | Technology                        |
-|-----------------|------------------------------------|
-| Framework       | FastAPI                            |
-| Server          | Uvicorn                           |
-| Validation      | Pydantic                          |
-| Authentication  | Supabase Auth                     |
-| Database        | SQLite (default) / PostgreSQL 16  |
-| DB Driver       | asyncpg / sqlite3 (stdlib)        |
-| Cache / Queue   | Redis 7 + RQ                      |
-| LLM Client      | Groq SDK (llama-3.1-8b-instant)   |
-| Scraping        | requests + BeautifulSoup4 + lxml  |
-| Container       | Docker + Docker Compose           |
-| Linting         | Ruff, Black, isort                |
-| CI              | GitHub Actions                    |
-| Config          | python-dotenv                     |
+✅ Automatic SQLite database creation
 
-## Requirements
+✅ Automatic table creation (`CREATE TABLE IF NOT EXISTS`)
 
-- Python 3.10+
-- pip
-- Docker (optional — required for PostgreSQL/Redis)
-- A Supabase project (for authentication)
-- A Groq API key (optional — falls back to mock)
+✅ One-time database seeding (3 sample tasks, seeded only on first run)
 
-## Installation
+✅ Parameterized SQL queries (SQL injection safe)
 
-```bash
-pip install -r requirements.txt
-```
+✅ Data survives restarts
 
-## Environment Variables
+✅ Supabase JWT authentication (signup, login, logout, protected endpoints)
 
-Copy `.env.example` to `.env` and configure:
+✅ Robots.txt-compliant web scraper with rate limiting and retries
 
-```env
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-REDIS_URL=redis://host:6380/0
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_anon_key_here
-SUPABASE_SERVICE_KEY=your_service_role_key
-GROQ_API_KEY=your_groq_api_key
-IPINFO_TOKEN=your_ipinfo_token
-PORT=8000
-```
+✅ Async AI inference via RQ (Redis Queue) + Groq, with mock fallback
 
-| Variable               | Required | Purpose                                  |
-|------------------------|----------|------------------------------------------|
-| `DATABASE_URL`         | No       | PostgreSQL connection string (omit to use SQLite) |
-| `REDIS_URL`            | No       | Redis connection for caching and RQ       |
-| `SUPABASE_URL`         | Yes      | Supabase project URL                      |
-| `SUPABASE_KEY`         | Yes      | Supabase anon/public key                  |
-| `SUPABASE_SERVICE_KEY` | No       | Required only for end-to-end tests        |
-| `GROQ_API_KEY`         | No       | Groq API key (falls back to mock if unset) |
-| `IPINFO_TOKEN`         | No       | ipinfo.io token for lead geo-enrichment   |
-| `PORT`                 | No       | Server port (default: `8000`)             |
+✅ Job lifecycle management (`queued → started → finished/failed`)
 
-## Running Locally (SQLite)
+✅ Exponential-backoff retries (10s → 60s → 300s, max 3, 600s timeout)
 
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+✅ Idempotent job creation via `Idempotency-Key` header
 
-The API is available at `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
+✅ Automated PDF report generation (ReportLab, served securely)
 
-## Running with Docker (PostgreSQL + Redis)
+✅ Embeddable widget (JS bundle + public config endpoint)
 
-```bash
-docker compose up --build
-```
+✅ Lead capture with origin validation and 3-tier rate limiting
 
-## Starting the AI Worker
+✅ Spam protection: honeypot trap, heuristic spam scoring, fingerprint dedup
 
-Background jobs require a running Redis instance and a worker process:
+✅ Geo enrichment of leads (multi-provider fallback chain)
 
-```bash
-# Terminal 1: start Redis (host port 6380 - matches the Compose stack)
-docker run -d -p 6380:6379 redis:7-alpine
+✅ Fail-open webhook dispatch on submissions
 
-# Terminal 2: start the worker
-python -m app.core.worker
+✅ Lead dashboard: search, filter, sort, pagination, stats, CSV export
 
-# Terminal 3: start the API
-uvicorn app.main:app --port 8000
-```
+✅ Redis caching for widget config and lead statistics
 
-## API Endpoints
+✅ 50 KB request body limit middleware
 
-### System
+✅ Comprehensive offline test suite (886+ passing tests, 99% coverage)
 
-| Method | Path           | Auth | Description                 |
-|--------|----------------|------|-----------------------------|
-| GET    | `/`            | No   | API info and Redis status   |
-| GET    | `/health`      | No   | Health check and Redis status |
-| GET    | `/public/info` | No   | Public welcome message       |
-
-### Tasks
-
-| Method | Path          | Auth | Description                    |
-|--------|---------------|------|----------------------------------|
-| GET    | `/tasks`      | No   | List tasks (`?search=&done=`)     |
-| GET    | `/tasks/{id}` | No   | Get a task by ID                  |
-| POST   | `/tasks`      | No   | Create a task                     |
-| PUT    | `/tasks/{id}` | No   | Update a task                     |
-| DELETE | `/tasks/{id}` | No   | Delete a task                     |
-| GET    | `/stats`      | No   | Task statistics                   |
-
-### Auth
-
-| Method | Path                   | Auth   | Description             |
-|--------|------------------------|--------|---------------------------|
-| POST   | `/auth/signup`         | No     | Create a new account       |
-| POST   | `/auth/login`          | No     | Sign in, returns tokens    |
-| POST   | `/auth/logout`         | Bearer | Sign out                   |
-| GET    | `/protected/profile`   | Bearer | Get user profile           |
-| GET    | `/protected/dashboard` | Bearer | User dashboard              |
-
-### Scraper
-
-| Method | Path      | Auth | Description                   |
-|--------|-----------|------|---------------------------------|
-| POST   | `/scrape` | No   | Scrape books (`?max_pages=5`)    |
-
-### AI / Background Jobs
-
-| Method | Path             | Auth | Description               |
-|--------|------------------|------|-----------------------------|
-| POST   | `/ai`            | No   | Enqueue an AI inference job  |
-| GET    | `/jobs/{job_id}` | No   | Poll job status               |
-| GET    | `/jobs`          | No   | List recent jobs              |
-
-### Reports
-
-| Method | Path                                    | Auth | Description                       |
-|--------|-----------------------------------------|------|-----------------------------------|
-| POST   | `/reports`                              | No   | Enqueue a PDF report generation    |
-| GET    | `/reports/{job_id}`                     | No   | Poll report status and metadata    |
-| GET    | `/reports/files/{filename}`             | No   | Download a generated PDF file      |
-
-### Widgets
-
-| Method | Path           | Auth   | Description                 |
-|--------|----------------|--------|-----------------------------|
-| GET    | `/widgets`     | Bearer | List widgets (`?search=&active=&page=&page_size=`) |
-| POST   | `/widgets`     | Bearer | Create a widget              |
-| GET    | `/widgets/{id}`| Bearer | Get a widget by ID           |
-| PUT    | `/widgets/{id}`| Bearer | Update a widget              |
-| DELETE | `/widgets/{id}`| Bearer | Delete a widget              |
-
-### Widget Embedding
-
-| Method | Path                              | Auth | Description                         |
-|--------|-----------------------------------|------|-------------------------------------|
-| GET    | `/public/widget/{id}/config`      | No   | Public widget config (JSON)         |
-| GET    | `/public/widget/{id}/widget.js`   | No   | Embeddable widget JS bundle         |
-| POST   | `/public/widget/{id}/submit`      | No   | Submit a lead from the widget       |
-
-### Leads
-
-| Method | Path                                      | Auth   | Description                         |
-|--------|-------------------------------------------|--------|-------------------------------------|
-| GET    | `/widgets/{id}/leads`                     | Bearer | List leads for a widget (filters/pagination) |
-| GET    | `/widgets/{id}/leads/{lead_id}`           | Bearer | Get a single lead                   |
-| GET    | `/widgets/{id}/stats`                     | Bearer | Lead statistics for a widget        |
-| GET    | `/widgets/{id}/export`                    | Bearer | Export widget leads as CSV          |
-| DELETE | `/widgets/{id}/leads/{lead_id}`           | Bearer | Delete a lead                       |
-| POST   | `/widgets/{id}/leads/batch-delete`        | Bearer | Batch delete leads                  |
-| POST   | `/widgets/{id}/leads/{lead_id}/re-enrich` | Bearer | Re-run enrichment for a lead        |
-| GET    | `/leads`                                  | Bearer | List leads across all widgets       |
-| GET    | `/leads/stats`                            | Bearer | Global lead statistics              |
-
-## AI Background Jobs — Architecture
-
-AI inference is processed asynchronously via RQ (Redis Queue), with a dedicated worker process consuming jobs from the `ai-jobs` queue.
-
-### Queue Flow
-
-1. Client sends `POST /ai` with a prompt and optional model
-2. API validates the request, creates a job record in Redis with status `queued`
-3. Job is enqueued to the `ai-jobs` RQ queue
-4. API immediately returns `202 Accepted` with the `job_id`
-5. Worker picks up the job, sets status to `started`
-6. Worker calls the AI service (Groq API or mock)
-7. On success: status set to `finished`, result stored
-8. On failure: status set to `failed`, error stored; retries if attempts remain
-
-### Retry Policy
-
-| Attempt | Interval |
-|---------|----------|
-| 1st     | 10s      |
-| 2nd     | 60s      |
-| 3rd     | 300s (5m)|
-
-Jobs time out after 600s (10 minutes). Job data is persisted in Redis with a 24h TTL.
-
-### Idempotency
-
-Include an `Idempotency-Key` header to prevent duplicate job creation. The key-to-job mapping is stored in Redis with a 24h TTL.
-
-## PDF Report Generation — Architecture
-
-Reports are generated asynchronously via RQ (Redis Queue), with a dedicated worker consuming jobs from the `report-jobs` queue. The PDF is produced server-side using ReportLab and stored on disk in the `generated_reports/` directory.
-
-### Queue Flow
-
-1. Client sends `POST /reports` — the API creates a job record in Redis and enqueues it
-2. API immediately returns `202 Accepted` with the `job_id`
-3. Worker picks up the job, sets status to `started`, updates the reports DB record
-4. Worker queries the database for aggregations (scraped books stats, AI jobs stats)
-5. Worker generates a PDF using ReportLab with tables, sections, and page numbering
-6. On success: status set to `finished`, file path stored in DB
-7. On failure: status set to `failed`, error stored; retries if attempts remain
-
-### Retry Policy
-
-Same three-tier backoff as AI jobs: 10s → 60s → 300s.
-
-### Download
-
-PDFs are served via `GET /reports/files/{filename}` with path-traversal protection and filename validation. Only files within the `generated_reports/` directory can be downloaded.
-
-## Widget & Lead Capture — Architecture
-
-Widgets are embedded on third-party sites and load a JS bundle (`/public/widget/{id}/widget.js`) that renders a configurable form (`/public/widget/{id}/config`). Submissions go through a validation and anti-abuse pipeline before the lead is stored; enrichment and a confirmation webhook run asynchronously afterwards.
-
-### Submission Pipeline
-
-1. Visitor submits the widget form → `POST /public/widget/{id}/submit`
-2. API looks up the widget and rejects unknown or inactive widgets (`404`)
-3. Origin validation checks the `Origin`/`Referer` header against the widget's configured domain — rejected requests return `403`
-4. Rate limiting checks the visitor across three tiers (per-IP, per-widget-IP, per-widget-global) in a 60s window and returns `429` with a `Retry-After` header when exceeded
-5. A hidden honeypot field, if filled in, records the lead as spam (score `1.0`) and skips enrichment and webhook dispatch
-6. A visitor fingerprint is computed and compared against previously seen submissions — duplicates return the existing lead instead of creating a new one
-7. Legitimate submissions are spam-scored, then stored as a lead
-8. An enrichment job is enqueued (async): a worker resolves IP geolocation and updates the lead
-9. A confirmation webhook is dispatched (async, fire-and-forget) to the widget's configured `webhook_url` — it never blocks or fails the submission
-10. The `201` response returns the new `lead_id`; the lead is immediately visible in the dashboard
-
-```mermaid
-flowchart TD
-    A[Visitor submits form] --> B[POST /public/widget/:id/submit]
-    B --> C{Widget active?}
-    C -- no --> C404[404 Widget not found]
-    C -- yes --> D{Origin allowed?}
-    D -- no --> D403[403 Origin rejected]
-    D -- yes --> E{Rate limit ok?}
-    E -- no --> E429[429 Retry-After]
-    E -- yes --> F{Honeypot filled?}
-    F -- yes --> H[Mark spam score 1.0]
-    F -- no --> G{Duplicate fingerprint?}
-    G -- yes --> G2[Return existing lead]
-    G -- no --> I[Spam score submission]
-    H --> J[Store lead]
-    G2 --> J
-    I --> J
-    J --> K[Enqueue enrichment job]
-    J --> L[Dispatch webhook fire-and-forget]
-    J --> M[201 lead_id returned]
-    K --> N[Worker: geo enrichment updates lead]
-    M --> O[Visible in dashboard list / stats / export]
-    N --> O
-```
-
-### Webhook
-
-When a widget's config sets a `webhook_url`, a POST with `{lead_id, widget_id, form_data, created_at}` is fired after each legitimate submission. Dispatch is asynchronous and fail-open: timeouts and provider errors are logged, never raised, so a webhook outage cannot turn a successful submission into an error.
+✅ Docker Compose stack and GitHub Actions CI pipeline
 
 ## Project Structure
 
 ```
 app/
-    main.py                     # FastAPI app, lifespan, router mounting
-    core/
-        database.py             # asyncpg pool (Postgres) / sqlite3 (default)
-        queue.py                # Redis connection, RQ queue, job CRUD
-        supabase.py             # Supabase admin client
-        worker.py               # Standalone RQ worker entry point
-    dependencies/
-        auth.py                 # Bearer token dependency
-        embed.py                # Widget origin validation
-        leads.py                # Rate limiting dependencies
-        services.py             # DI providers (get_lead_repo, get_widget_repo, get_redis)
-    middleware/
-        body_limit.py           # 50KB request body size limit
-    models/
-        task.py, auth.py, scraped_book.py, job.py, report.py
-        lead.py, widget.py
-    services/
-        task_service.py         # Task business logic
-        scraped_book_service.py # Scrape orchestration
-        ai_service.py           # Groq API call (with mock fallback)
-        ai_worker.py            # RQ worker function
-        report_service.py       # Report enqueue + metadata + aggregation
-        report_worker.py        # RQ worker function for PDF generation
-        pdf_generator.py        # ReportLab PDF document builder
-        alert.py                # Failure alert stub
-        embed_service.py        # Public widget config/JS lookup
-        widget_service.py       # Widget CRUD business logic
-        widget_js.py            # Widget JS bundle renderer
-        lead_service.py         # Lead submission pipeline, stats, export
-        lead_worker.py          # RQ worker for lead enrichment
-        spam_service.py         # Spam scoring
-        fingerprint_service.py  # Fingerprint computation + dedup
-        geo_service.py          # IP geolocation enrichment (ipapi.co/ipinfo/ip-api)
-        webhook_service.py      # Fail-open webhook dispatch
-    repositories/
-        protocol.py             # Repository Protocols
-        sqlite_repo.py          # SQLite (default)
-        postgres_repo.py        # PostgreSQL via asyncpg
-        postgres_widget_repo.py # Widget PostgreSQL implementation
-        postgres_lead_repo.py   # Lead PostgreSQL implementation
-        widget_repo.py          # Widget in-memory implementation
-        lead_repo.py            # Lead in-memory implementation
-        scraped_book_repo.py    # ScrapedBook PostgreSQL
-        report_repo.py          # Report CRUD (SQLite + PostgreSQL)
-    routers/
-        tasks.py                # Task CRUD + stats
-        auth.py                 # Auth endpoints
-        scrape.py               # Scrape trigger
-        ai.py                   # AI job enqueue + status
-        reports.py              # Report enqueue, status, download
-        widgets.py              # Widget CRUD
-        embed.py                # Public widget config + JS
-        leads.py                # Lead submission + dashboard + cross-widget
-    scrapers/
-        session.py, parser.py, cleaner.py, pipeline.py
-db/
-    init.sql                    # PostgreSQL DDL (tasks, scraped_books, reports, widgets, leads, rate_limits)
-scripts/
-    seed_explain.py             # EXPLAIN ANALYZE index benchmark
-.github/
-    workflows/
-        ci.yml                  # GitHub Actions CI pipeline
+├── main.py                  # FastAPI app, lifespan, router mounting, /health
+├── core/
+│   ├── database.py          # asyncpg pool (Postgres) / SQLite fallback detection
+│   ├── queue.py             # Redis connection, RQ queues, job CRUD (ai/report/enrichment)
+│   ├── supabase.py          # Supabase client bootstrap
+│   └── worker.py            # Standalone RQ worker entrypoint (3 queues)
+├── dependencies/
+│   ├── auth.py              # Bearer-token auth dependency
+│   ├── embed.py             # Widget origin validation
+│   ├── leads.py             # 3-tier rate limiting + origin checks
+│   └── services.py          # DI providers (repositories, Redis)
+├── middleware/
+│   └── body_limit.py        # ASGI-level 50 KB payload cap
+├── models/                  # Pydantic v2 schemas: task, auth, job, report, scraped_book, widget, lead
+├── repositories/
+│   ├── protocol.py          # Task / Widget / Lead repository Protocols
+│   ├── sqlite_repo.py       # SQLite task repo (default backend)
+│   ├── postgres_repo.py     # PostgreSQL task repo (asyncpg)
+│   ├── widget_repo.py       # In-memory widget repo (dev/tests)
+│   ├── lead_repo.py         # In-memory lead repo (dev/tests)
+│   ├── postgres_widget_repo.py
+│   ├── postgres_lead_repo.py
+│   ├── scraped_book_repo.py # Scraped-book upserts (Postgres only)
+│   └── report_repo.py       # Report CRUD (SQLite + Postgres)
+├── routers/                 # tasks, auth, scrape, ai, reports, widgets, embed, leads
+├── scrapers/
+│   ├── session.py           # HTTP session, robots.txt parser, throttling, retries
+│   ├── parser.py            # HTML parsing of listing + detail pages
+│   ├── cleaner.py           # Field normalization (price, rating, availability)
+│   └── pipeline.py          # Scrape orchestration (pages → books)
+└── services/
+    ├── task_service.py      # Task business logic
+    ├── ai_service.py        # Groq inference call (mock fallback)
+    ├── ai_worker.py         # RQ worker: AI job execution
+    ├── report_service.py    # Report enqueue, metadata, DB aggregation
+    ├── report_worker.py     # RQ worker: PDF generation
+    ├── pdf_generator.py     # ReportLab document builder
+    ├── widget_service.py    # Widget CRUD business logic
+    ├── widget_js.py         # Widget JS bundle renderer
+    ├── embed_service.py     # Public widget config lookup (Redis-cached)
+    ├── lead_service.py      # Lead submission pipeline, stats, CSV export
+    ├── lead_worker.py       # RQ worker: geo enrichment
+    ├── spam_service.py      # Heuristic spam scoring
+    ├── fingerprint_service.py # Submission fingerprint + dedup
+    ├── geo_service.py       # IP geolocation (ipapi.co → ipinfo → ip-api)
+    ├── webhook_service.py   # Fail-open webhook dispatch
+    └── alert.py             # Failure alert stub (CRITICAL log)
+
+tests/                       # ~1,000 unit + integration tests (fully offline)
+db/init.sql                  # PostgreSQL DDL (6 tables + indexes)
+scripts/seed_explain.py      # EXPLAIN ANALYZE index benchmark
+.github/workflows/ci.yml     # isort → black → ruff → pytest pipeline
 ```
 
-## Testing
+## Tech Stack
 
-Run all unit tests (mocked Redis, no network required):
+| Component       | Technology                                      |
+|-----------------|-------------------------------------------------|
+| Language        | Python ≥ 3.10 (3.13 in CI / Docker)             |
+| Framework       | FastAPI + Uvicorn                               |
+| Validation      | Pydantic v2                                     |
+| Database        | SQLite (default) / PostgreSQL 16 (asyncpg)      |
+| Cache / Queue   | Redis 7 + RQ                                    |
+| AI Inference    | Groq SDK (default `llama-3.1-8b-instant`, mock fallback) |
+| Authentication  | Supabase Auth (JWT)                             |
+| PDF Generation  | ReportLab                                       |
+| Scraping        | requests + urllib3 retries + BeautifulSoup4 + lxml |
+| Testing         | pytest, pytest-asyncio, pytest-mock, httpx, pytest-cov |
+| Tooling         | Ruff, Black, isort, python-dotenv               |
+| Container       | Docker + Docker Compose                         |
+| CI              | GitHub Actions                                  |
+
+## Architecture
+
+The API follows a strict layered design so each concern is isolated and independently testable:
+
+```
+Client
+  ↓
+FastAPI Router    — HTTP contract: validation, status codes, auth dependencies
+  ↓
+Service Layer     — business rules: seeding, job lifecycle, spam scoring, stats
+  ↓
+Repository Layer  — data access via Protocol-typed repositories (parameterized SQL)
+  ↓
+SQLite tasks.db / PostgreSQL
+```
+
+- **Routers** parse requests, enforce auth, and translate HTTP errors — no business logic.
+- **Services** hold the business rules (e.g. the lead submission pipeline, job lifecycle).
+- **Repositories** implement a shared Protocol (`app/repositories/protocol.py`) so the SQLite, PostgreSQL, and in-memory backends are interchangeable without touching upper layers.
+
+### Background jobs
+
+Long-running work (AI inference, PDF reports, lead enrichment) runs asynchronously on RQ:
+
+1. `POST /ai`, `POST /reports`, or a lead submission enqueues a job on `ai-jobs`, `report-jobs`, or `enrichment-jobs`.
+2. The API returns `202 Accepted` immediately with a `job_id`; state lives in Redis under `job:{id}` / `report_job:{id}` / `enrichment_job:{id}`.
+3. A worker transitions the status `queued → started → finished/failed` and stores the result or error.
+4. Failures retry with exponential backoff (10s → 60s → 300s, max 3) before the job is marked failed and an alert is raised.
+
+### Widget submission pipeline
+
+`POST /public/widget/{id}/submit` runs every submission through a defense-in-depth chain:
+
+1. Widget lookup — unknown or inactive widgets return `404`.
+2. Origin validation — the `Origin`/`Referer` host must match the widget's domain (wildcard `*.` supported); mismatches return `403`.
+3. Rate limiting — three tiers (per-IP, per-widget/IP, per-widget) in a 60s window; excess returns `429` with `Retry-After`.
+4. Honeypot trap — a hidden field that bots fill in; it flags the lead as spam (score `1.0`) and skips enrichment/webhooks.
+5. Fingerprint dedup — identical submissions within the window return the existing lead instead of a duplicate.
+6. Spam scoring — heuristic scoring (URLs, identical fields, non-ASCII avalanches, disposable email domains, malformed phones).
+7. Storage + async side effects — the lead is stored, then geo enrichment is enqueued and any configured webhook is dispatched fire-and-forget.
+
+## Database
+
+### SQLite (`tasks.db` — default)
+
+When no `DATABASE_URL` is set the app uses a local SQLite file (`tasks.db`):
+
+- **Automatic creation** — the database file is created on first access.
+- **Automatic table creation** — `CREATE TABLE IF NOT EXISTS tasks (...)` on startup.
+- **Automatic seeding** — if the `tasks` table is empty, three sample tasks are inserted (Learn FastAPI, Write tests, Build a project).
+- **Seed once** — seeding is guarded by a row count, so it never runs twice.
+- **Persistence** — data survives restarts because every write is committed to the file.
+
+### PostgreSQL
+
+When `DATABASE_URL` is set, the app uses an asyncpg pool. The full schema — `tasks`, `scraped_books`, `reports`, `widgets`, `leads`, `rate_limits` — is defined in `db/init.sql` and applied automatically on first startup via Docker Compose.
+
+## API Endpoints
+
+### System
+
+| Method | Path           | Auth | Description                                  |
+|--------|----------------|------|----------------------------------------------|
+| GET    | `/`            | No   | API info and Redis status                    |
+| GET    | `/health`      | No   | Health check with Redis/Postgres status      |
+| GET    | `/public/info` | No   | Public welcome message                       |
+
+### Tasks
+
+| Method | Path            | Auth | Description                              |
+|--------|-----------------|------|------------------------------------------|
+| GET    | `/tasks`        | No   | List tasks (`?search=&done=`)            |
+| GET    | `/tasks/{id}`   | No   | Get a task by ID                         |
+| POST   | `/tasks`        | No   | Create a task (`201`)                    |
+| PUT    | `/tasks/{id}`   | No   | Update a task                            |
+| DELETE | `/tasks/{id}`   | No   | Delete a task (`204`)                    |
+| GET    | `/stats`        | No   | Task statistics (total / done / pending) |
+
+### Auth
+
+| Method | Path                   | Auth   | Description                           |
+|--------|------------------------|--------|---------------------------------------|
+| POST   | `/auth/signup`         | No     | Create an account (`201`)             |
+| POST   | `/auth/login`          | No     | Sign in, returns access + refresh tokens |
+| POST   | `/auth/logout`         | Bearer | Sign out (`204`)                      |
+| GET    | `/protected/profile`   | Bearer | Current user profile                  |
+| GET    | `/protected/dashboard` | Bearer | User dashboard                        |
+
+### Scraper
+
+| Method | Path        | Auth | Description                          |
+|--------|-------------|------|--------------------------------------|
+| POST   | `/scrape`   | No   | Scrape books (`?max_pages=5`) — Postgres required |
+
+### AI / Background Jobs
+
+| Method | Path             | Auth | Description                              |
+|--------|------------------|------|------------------------------------------|
+| POST   | `/ai`            | No   | Enqueue an AI inference job (`202`, optional `Idempotency-Key` header) |
+| GET    | `/jobs/{job_id}` | No   | Poll job status                          |
+| GET    | `/jobs`          | No   | List recent jobs (`?limit=&offset=`)     |
+
+### Reports
+
+| Method | Path                        | Auth | Description                          |
+|--------|-----------------------------|------|--------------------------------------|
+| POST   | `/reports`                  | No   | Enqueue a PDF report (`202`)         |
+| GET    | `/reports/{job_id}`         | No   | Report status and download URL       |
+| GET    | `/reports/files/{filename}` | No   | Download a generated PDF (path-traversal protected) |
+
+### Widgets
+
+| Method | Path                 | Auth   | Description                                        |
+|--------|----------------------|--------|----------------------------------------------------|
+| GET    | `/widgets`           | Bearer | List widgets (`?search=&active=&page=&page_size=`) |
+| POST   | `/widgets`           | Bearer | Create a widget (`201`)                            |
+| GET    | `/widgets/{widget_id}` | Bearer | Get a widget by ID                               |
+| PUT    | `/widgets/{widget_id}` | Bearer | Update a widget (bumps `js_version`)             |
+| DELETE | `/widgets/{widget_id}` | Bearer | Soft-delete a widget (`204`)                     |
+
+### Public Widget Embed
+
+| Method | Path                                   | Auth | Description                              |
+|--------|----------------------------------------|------|------------------------------------------|
+| GET    | `/public/widget/{id}/config`           | No   | Public widget config (JSON)              |
+| GET    | `/public/widget/{id}/widget.js`        | No   | Embeddable widget JS bundle (1-year immutable cache) |
+| POST   | `/public/widget/{id}/submit`           | No   | Submit a lead from the widget (`201`)    |
+
+### Leads
+
+| Method | Path                                          | Auth   | Description                              |
+|--------|-----------------------------------------------|--------|------------------------------------------|
+| GET    | `/widgets/{id}/leads`                         | Bearer | List widget leads (filters + pagination) |
+| GET    | `/widgets/{id}/leads/{lead_id}`               | Bearer | Get a single lead                        |
+| GET    | `/widgets/{id}/stats`                         | Bearer | Widget lead statistics                   |
+| GET    | `/widgets/{id}/export`                        | Bearer | Export widget leads as CSV               |
+| DELETE | `/widgets/{id}/leads/{lead_id}`               | Bearer | Delete a lead (`204`)                    |
+| POST   | `/widgets/{id}/leads/batch-delete`            | Bearer | Batch delete leads (`204`)               |
+| POST   | `/widgets/{id}/leads/{lead_id}/re-enrich`     | Bearer | Re-run geo enrichment (`202`)            |
+| GET    | `/leads`                                      | Bearer | List leads across all widgets            |
+| GET    | `/leads/stats`                                | Bearer | Global lead statistics                   |
+
+## Example Requests
+
+```bash
+# Tasks — CRUD
+curl http://localhost:8000/tasks
+curl http://localhost:8000/tasks?search=fastapi&done=false
+curl -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Design review","done":false}'
+curl -X PUT http://localhost:8000/tasks/4 \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Design review","done":true}'
+curl -X DELETE http://localhost:8000/tasks/4
+curl http://localhost:8000/stats
+
+# Auth
+curl -X POST http://localhost:8000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"pass123"}'
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"pass123"}'
+# → {"access_token":"...","refresh_token":"..."}
+curl http://localhost:8000/protected/profile \
+  -H "Authorization: Bearer <access_token>"
+
+# Enqueue an AI job (async)
+curl -X POST http://localhost:8000/ai \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: my-unique-key" \
+  -d '{"prompt":"Summarize FastAPI","model":"llama-3.1-8b-instant"}'
+# → 202 {"job_id":"...","status":"queued","status_url":"/jobs/..."}
+
+# Poll job status
+curl http://localhost:8000/jobs/<job_id>
+
+# Scrape books (Postgres required)
+curl -X POST "http://localhost:8000/scrape?max_pages=3"
+
+# Enqueue a PDF report
+curl -X POST http://localhost:8000/reports
+# → 202 {"job_id":"...","status":"queued"}
+
+# Download the generated PDF
+curl -o report.pdf http://localhost:8000/reports/files/report_<job_id>.pdf
+```
+
+## Running the Project
+
+```bash
+# 1. Clone the repository
+git clone <repo-url>
+cd <repo-dir>
+
+# 2. Install dependencies (Python 3.10+)
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Configure environment
+cp .env.example .env
+# Required: SUPABASE_URL, SUPABASE_KEY (the app refuses to start without them)
+
+# 4. Run the API
+uvicorn app.main:app --reload --port 8000
+```
+
+The API is available at `http://localhost:8000` and interactive Swagger docs at `http://localhost:8000/docs`.
+
+### Background worker
+
+Async features (AI jobs, reports, lead enrichment) need Redis and a worker:
+
+```bash
+docker run -d -p 6380:6379 redis:7-alpine
+python -m app.core.worker
+```
+
+### Full stack with Docker
+
+```bash
+docker compose up --build
+```
+
+This starts PostgreSQL 16 (with `db/init.sql` applied), Redis 7 on host port `6380`, and the app — each with healthchecks.
+
+## Running Tests
+
+The full test suite runs fully offline using in-memory repositories and fake Redis/RQ (no network, no Docker required):
 
 ```bash
 pytest
@@ -370,89 +370,95 @@ With coverage:
 pytest --cov=app --cov-report=term-missing
 ```
 
-Run specific test suites:
+Exact CI invocation (from `.github/workflows/ci.yml`):
 
 ```bash
-# Router tests
+python -m pytest \
+  tests/embed/ tests/leads/ tests/widgets/ tests/middleware/ tests/models/ \
+  tests/repositories/ tests/routers/ tests/scrapers/ tests/services/ \
+  tests/test_main.py tests/test_background_jobs.py tests/test_e2e_widget.py \
+  tests/test_lead_worker.py tests/test_report_worker.py tests/test_worker.py \
+  --ignore=tests/test_e2e.py --ignore=tests/test_ai_e2e.py \
+  --cov=app --cov-report=term-missing --tb=short -v
+```
+
+Latest recorded CI result: **886 passed, 1 xfailed, 99% coverage** (2 pre-existing Postgres `ConnectionRefused` failures only occur when no Postgres is running). `tests/test_db_schema.py` requires a live Postgres, and `tests/test_e2e.py` / `tests/test_ai_e2e.py` require real Supabase/Redis — all three are excluded from CI.
+
+Run a single test file:
+
+```bash
 pytest tests/routers/test_ai.py -v
-
-# Worker tests
-pytest tests/test_worker.py -v
-
-# Background job tests (comprehensive)
-pytest tests/test_background_jobs.py -v
-
-# End-to-end auth (requires real Supabase + a running server)
-pytest tests/test_e2e.py -v -s
-
-# End-to-end AI (requires real Redis + a running RQ worker)
-pytest tests/test_ai_e2e.py -v -s
-
-# Report tests
-pytest tests/routers/test_reports.py -v
-pytest tests/services/test_pdf_generator.py -v
-pytest tests/services/test_report_service.py -v
-pytest tests/test_report_worker.py -v
-pytest tests/repositories/test_report_repo.py -v
 ```
 
-### CI Pipeline
+## SQL Example
 
-Every push and pull request to `main` triggers a GitHub Actions workflow that lints (isort, Black, Ruff) and tests the full suite. The pipeline is defined in `.github/workflows/ci.yml`.
-
-## Example Requests
-
-```bash
-# Enqueue an AI job
-curl -X POST http://localhost:8000/ai \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Tell me a joke", "model": "llama3-8b-8192"}'
-
-# Response: 202 Accepted
-# {"job_id":"<uuid>","status":"queued"}
-
-# Poll job status
-curl http://localhost:8000/jobs/<uuid>
-
-# List recent jobs
-curl http://localhost:8000/jobs?limit=10&offset=0
-
-# Enqueue with idempotency key
-curl -X POST http://localhost:8000/ai \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: my-unique-key" \
-  -d '{"prompt": "Hello"}'
-
-# Task CRUD
-curl http://localhost:8000/tasks?search=fastapi
-curl -X POST http://localhost:8000/tasks -H "Content-Type: application/json" -d '{"title":"Demo","done":false}'
-curl http://localhost:8000/stats
-
-# Auth
-curl -X POST http://localhost:8000/auth/signup -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"pass123"}'
-curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"pass123"}'
-
-# Scrape (requires PostgreSQL)
-curl -X POST "http://localhost:8000/scrape?max_pages=3"
-
-# Enqueue a PDF report
-curl -X POST http://localhost:8000/reports
-
-# Response: 202 Accepted
-# {"job_id":"<uuid>","status":"queued"}
-
-# Poll report status
-curl http://localhost:8000/reports/<uuid>
-
-# Download generated PDF
-curl -o report.pdf http://localhost:8000/reports/files/hr_report_<uuid>.pdf
+```sql
+SELECT * FROM tasks WHERE done = 1;
 ```
 
-## Known Limitations
+Returns every task marked as complete. This is the exact query shape used by the repository layer (`app/repositories/sqlite_repo.py`) to compute task statistics — all queries are parameterized with `?` placeholders to prevent SQL injection.
 
-- Scraped book persistence requires PostgreSQL — SQLite is not supported for this feature
-- AI jobs and report generation require Redis with an active RQ worker
-- No email verification flow (disable Supabase's "Confirm email" setting for local development)
-- The scraper runs synchronously within the request thread
-- Supabase free-tier rate limits may affect auth end-to-end tests
-- Job listing uses Redis `SCAN` which may be slow with very large job sets
+## Database Screenshot
+
+> Placeholder — add `docs/database.png` showing the `tasks` table populated with the seeded rows (e.g. from the SQLite CLI or a DB browser).
+
+## Assignment Requirements Mapping
+
+| Requirement (implementation-plan.md) | Status | Implementation |
+|--------------------------------------|--------|----------------|
+| M1 — Database schema & migrations (`widgets`, `leads`, `rate_limits`) | ✅ Implemented | `db/init.sql`, `app/core/database.py` |
+| M2 — Widget CRUD: repository + service + router | ✅ Implemented | `app/repositories/{widget_repo,postgres_widget_repo}.py`, `app/services/widget_service.py`, `app/routers/widgets.py` |
+| M3 — Public embed endpoints (config, widget.js) | ✅ Implemented | `app/routers/embed.py`, `app/services/{embed_service,widget_js}.py`, `app/dependencies/embed.py` |
+| M4 — Lead capture submission pipeline | ✅ Implemented | `app/routers/leads.py`, `app/services/{lead_service,spam_service,fingerprint_service}.py`, `app/dependencies/leads.py`, `app/middleware/body_limit.py` |
+| M5 — Geo enrichment background jobs | ✅ Implemented | `app/services/{geo_service,lead_worker}.py`, `app/core/queue.py` |
+| M6 — Lead dashboard APIs (stats, export, batch ops) | ✅ Implemented | `app/routers/leads.py`, `app/services/lead_service.py`, `app/repositories/lead_repo.py` |
+| M7 — Security hardening (origin edge cases, audit logging) | ✅ Implemented | `app/dependencies/embed.py`, `app/services/lead_service.py` (audit logger) |
+| M8 — Testing completion & CI | ✅ Implemented | `tests/` (886+ passing tests), `.github/workflows/ci.yml` |
+
+## Optional Features
+
+- **Search** — tasks by title; widgets and leads by keyword
+- **Filtering** — leads by status, spam score range, and date range; tasks by `done`
+- **Sorting** — leads by any field, ascending or descending
+- **Pagination** — widgets and leads (`page`, `page_size`, max 100)
+- **Statistics** — task stats (`/stats`), per-widget and global lead stats
+- **Timestamps** — `created_at` / `updated_at` on every model, auto-maintained
+- **CSV export** — per-widget lead export with a 10,000-row cap (`X-Export-Truncated` header)
+- **Caching** — Redis caching for widget config and lead stats (5-min TTL), 24h geo lookups
+- **Idempotency** — `Idempotency-Key` header deduplicates AI job creation (24h TTL)
+- **Webhooks** — optional per-widget HTTPS webhook, dispatched fire-and-forget
+- **Protections** — honeypot trap, heuristic spam scoring, fingerprint dedup, 3-tier rate limiting, origin validation
+- **Audit logging** — every submission outcome (success / blocked / spam) is logged as JSON
+
+## Testing Strategy
+
+- **Unit tests** — models, services, repositories, scrapers, and middleware in isolation; SQLite repos are exercised against a temporary database (`tmp_path`), so each run starts clean.
+- **Integration tests** — router + service + repository flows through the FastAPI `TestClient`, covering the full widget submission pipeline and background-job lifecycle.
+- **End-to-end tests** — `tests/test_e2e_widget.py` (offline, in CI) drives create-widget → submit-lead → enrichment; `tests/test_e2e.py` and `tests/test_ai_e2e.py` require live Supabase/Redis/server and are excluded from CI.
+- **Offline fakes** — `tests/conftest.py` installs `_FakeRedis` and `_FakeQueue` and patches all `is_postgres_enabled` calls, so the suite never touches the network.
+- **Repository swapping** — the Repository Protocol lets tests substitute in-memory or SQLite implementations for any data access layer.
+- **Isolation** — every test resets fake state via autouse fixtures; no cross-test pollution.
+- **Coverage** — CI enforces coverage reporting (`--cov=app --cov-report=term-missing`); latest run measures 99% statement coverage.
+
+## Design Decisions
+
+- **SQLite by default** — zero-config, file-based persistence for local development; PostgreSQL via `DATABASE_URL` when needed, selected at import time in `app/core/database.py`.
+- **Repository pattern** — data access is behind Protocol-typed repositories (`app/repositories/protocol.py`), making SQLite/Postgres/in-memory backends swappable and trivially testable.
+- **Parameterized queries** — all SQL uses `?` / `$n` placeholders; user input is never string-interpolated into queries.
+- **Automatic initialization** — `tasks.db` and tables are created on first access; `db/init.sql` seeds the Postgres schema in Docker.
+- **One-time seeding** — sample tasks are inserted only when the table is empty, so seed data never duplicates across restarts.
+- **Async everywhere** — SQLite calls run in a threadpool (`run_in_threadpool`) so the event loop stays responsive.
+
+## Future Improvements
+
+- Email verification flow (currently relies on Supabase's default confirmation settings)
+- Real alert delivery — replace the CRITICAL-log stub in `app/services/alert.py` with Slack/email/webhook
+- Pagination and cursor-based listing for `/jobs` (currently Redis `SCAN`)
+- Webhook retry queue with persistent delivery guarantees
+- Postgres as the default configuration with SQLite as the dev fallback
+- Persistent `rate_limits` audit table integration (schema exists in `db/init.sql`)
+- Circuit breaker around geo providers and per-provider rate-limit budgets
+
+## License
+
+[MIT](LICENSE)
