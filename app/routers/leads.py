@@ -21,7 +21,12 @@ dashboard_router = APIRouter(prefix="/widgets", tags=["leads"])
 cross_router = APIRouter(prefix="/leads", tags=["leads"])
 
 
-@router.post("/{widget_id}/submit", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{widget_id}/submit",
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a lead",
+    description="Accepts a public widget form submission. Validates origin, rate limits, honeypot, fingerprint dedup, and spam score before storing the lead, then enqueues enrichment and dispatches any configured webhook asynchronously. Returns 201 with the new lead_id.",
+)
 async def submit_lead(
     widget_id: UUID,
     body: LeadSubmit,
@@ -57,6 +62,8 @@ def _paginated_response(items, total: int, page: int, page_size: int):
 @dashboard_router.get(
     "/{widget_id}/leads",
     response_model=PaginatedLeadResponse,
+    summary="List widget leads",
+    description="Lists leads for a widget owned by the authenticated user, with filtering by search, status, spam score range, and date range, plus pagination and sorting.",
 )
 async def list_widget_leads(
     widget_id: UUID,
@@ -111,6 +118,8 @@ async def list_widget_leads(
 @cross_router.get(
     "",
     response_model=PaginatedLeadResponse,
+    summary="List all leads",
+    description="Lists the authenticated user's leads across all widgets, with the same filters and pagination as the per-widget list.",
 )
 async def list_all_leads(
     page: int = Query(1, ge=1),
@@ -152,6 +161,8 @@ async def list_all_leads(
 @dashboard_router.get(
     "/{widget_id}/leads/{lead_id}",
     response_model=LeadResponse,
+    summary="Get a lead",
+    description="Returns a single lead owned by the authenticated user. Returns 404 if it does not exist.",
 )
 async def get_lead_detail(
     widget_id: UUID,
@@ -177,7 +188,11 @@ async def get_lead_detail(
 # ── Per-widget stats ──────────────────────────────────────────────
 
 
-@dashboard_router.get("/{widget_id}/stats")
+@dashboard_router.get(
+    "/{widget_id}/stats",
+    summary="Get widget lead stats",
+    description="Returns aggregate lead statistics for a widget owned by the authenticated user.",
+)
 async def get_widget_stats(
     widget_id: UUID,
     user: dict = Depends(get_current_user),
@@ -206,7 +221,11 @@ async def get_widget_stats(
 # ── Cross-widget stats ────────────────────────────────────────────
 
 
-@cross_router.get("/stats")
+@cross_router.get(
+    "/stats",
+    summary="Get global lead stats",
+    description="Returns aggregate lead statistics across all of the authenticated user's widgets.",
+)
 async def get_global_stats(
     user: dict = Depends(get_current_user),
     repo: LeadRepository = Depends(get_lead_repo),
@@ -219,7 +238,11 @@ async def get_global_stats(
 # ── CSV export ────────────────────────────────────────────────────
 
 
-@dashboard_router.get("/{widget_id}/export")
+@dashboard_router.get(
+    "/{widget_id}/export",
+    summary="Export widget leads to CSV",
+    description="Exports a widget's leads as a CSV attachment, optionally filtered by date range. Sets the X-Export-Truncated header when the export is truncated at the row limit.",
+)
 async def export_leads_csv(
     widget_id: UUID,
     date_from: date | None = Query(None),
@@ -266,6 +289,8 @@ async def export_leads_csv(
 @dashboard_router.delete(
     "/{widget_id}/leads/{lead_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a lead",
+    description="Deletes a single lead owned by the authenticated user. Returns 204 on success and 404 if it does not exist.",
 )
 async def delete_lead(
     widget_id: UUID,
@@ -293,6 +318,8 @@ async def delete_lead(
 @dashboard_router.post(
     "/{widget_id}/leads/batch-delete",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Batch delete leads",
+    description="Deletes multiple leads owned by the authenticated user in one request. Returns 204.",
 )
 async def batch_delete_leads(
     widget_id: UUID,
@@ -316,6 +343,8 @@ async def batch_delete_leads(
 @dashboard_router.post(
     "/{widget_id}/leads/{lead_id}/re-enrich",
     status_code=status.HTTP_202_ACCEPTED,
+    summary="Re-enrich a lead",
+    description="Re-queues enrichment (IP geolocation) for an existing lead owned by the authenticated user. Returns 202 Accepted with the job status.",
 )
 async def re_enrich_lead(
     widget_id: UUID,

@@ -16,7 +16,12 @@ from app.services import widget_service
 router = APIRouter(prefix="/widgets", tags=["widgets"])
 
 
-@router.get("/", response_model=PaginatedResponse)
+@router.get(
+    "/",
+    response_model=PaginatedResponse,
+    summary="List widgets",
+    description="Lists the authenticated user's widgets with optional search, active filter, and pagination.",
+)
 async def list_widgets(
     search: str | None = Query(None),
     active: bool | None = Query(None),
@@ -44,7 +49,13 @@ async def list_widgets(
     )
 
 
-@router.post("/", response_model=WidgetResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=WidgetResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a widget",
+    description="Creates a new widget for the authenticated user and returns it. The config accepts an optional webhook_url for submission notifications.",
+)
 async def create_widget(
     data: WidgetCreate,
     user: dict = Depends(get_current_user),
@@ -54,7 +65,12 @@ async def create_widget(
     return await widget_service.create_widget(data, tenant_id, repo=repo)
 
 
-@router.get("/{widget_id}", response_model=WidgetResponse)
+@router.get(
+    "/{widget_id}",
+    response_model=WidgetResponse,
+    summary="Get a widget",
+    description="Returns a single widget owned by the authenticated user. Returns 404 if it does not exist.",
+)
 async def get_widget(
     widget_id: UUID,
     user: dict = Depends(get_current_user),
@@ -70,7 +86,12 @@ async def get_widget(
     return widget
 
 
-@router.put("/{widget_id}", response_model=WidgetResponse)
+@router.put(
+    "/{widget_id}",
+    response_model=WidgetResponse,
+    summary="Update a widget",
+    description="Updates a widget owned by the authenticated user and returns the updated widget. Returns 404 if it does not exist.",
+)
 async def update_widget(
     widget_id: UUID,
     data: WidgetUpdate,
@@ -89,7 +110,12 @@ async def update_widget(
     return widget
 
 
-@router.delete("/{widget_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{widget_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a widget",
+    description="Soft-deletes a widget owned by the authenticated user. Returns 204 on success and 404 if it does not exist.",
+)
 async def delete_widget(
     widget_id: UUID,
     user: dict = Depends(get_current_user),

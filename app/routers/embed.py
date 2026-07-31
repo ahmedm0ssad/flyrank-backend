@@ -9,7 +9,11 @@ from app.services.widget_js import render_widget_js
 router = APIRouter(prefix="/public/widget", tags=["public-widget"])
 
 
-@router.get("/{widget_id}/config")
+@router.get(
+    "/{widget_id}/config",
+    summary="Get public widget config",
+    description="Returns the public configuration JSON for an active widget, used by the embed script to render its form. Returns 404 if the widget does not exist.",
+)
 async def get_widget_config(widget_id: UUID):
     config = await embed_service.get_widget_config(str(widget_id))
     if config is None:
@@ -20,7 +24,11 @@ async def get_widget_config(widget_id: UUID):
     return JSONResponse(content=config)
 
 
-@router.get("/{widget_id}/widget.js")
+@router.get(
+    "/{widget_id}/widget.js",
+    summary="Get embeddable widget JS bundle",
+    description="Returns the JavaScript bundle that renders the widget on a third-party site. Served with an immutable one-year cache; returns 404 if the widget is missing and 410 if it has been deleted.",
+)
 async def get_widget_js(
     widget_id: UUID,
     v: int | None = Query(None),
