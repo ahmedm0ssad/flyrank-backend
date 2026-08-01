@@ -63,6 +63,7 @@ Single-file: `pytest tests/routers/test_ai.py -v` (works for any test path).
 - `conftest.py` sets `DATABASE_URL=""` and `REDIS_URL=""`, patches all `is_postgres_enabled` calls to `False`, and installs `_FakeRedis` + `_FakeQueue`. Tests are fully offline.
 - `pyproject.toml`: `asyncio_mode = "auto"`.
 - `tests/test_db_schema.py` is **ignored on pytest** (`addopts --ignore` in `pyproject.toml`) — needs a live Postgres. Run it explicitly (`pytest tests/test_db_schema.py`) against a running `db` service.
+- `tests/repositories/test_postgres_lead_repo_live.py` is **ignored on pytest** (`addopts --ignore` in `pyproject.toml`) — a real asyncpg integration suite for `PostgresLeadRepository` that needs the compose `db` service. Run it explicitly: `python -m pytest tests/repositories/test_postgres_lead_repo_live.py -o addopts="" -v`. It reassigns `app.core.database.DATABASE_URL` at import (default `postgresql://flyrank:flyrank_pass@127.0.0.1:5432/flyrank`, override with `FLYRANK_TEST_DATABASE_URL`). This is the suite that caught F6 (asyncpg `IPv4Address` → `LeadResponse.ip_address: str`); keep it green whenever Postgres-facing code changes.
 - E2E tests (`test_e2e.py`, `test_ai_e2e.py`) are **always excluded from CI** — need real Supabase/Redis/server.
 
 ## Framework quirks

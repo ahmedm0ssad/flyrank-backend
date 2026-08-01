@@ -36,4 +36,4 @@ profile = "black"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--ignore=tests/test_db_schema.py"
+addopts = "--ignore=tests/test_db_schema.py --ignore=tests/repositories/test_postgres_lead_repo_live.py"
