@@ -93,6 +93,6 @@ Visually confirm that only intended files are staged. If binary docs, PDFs, or u
 
 - **`GET /health`** — Returns `{"status": "ok"}` with optional `redis` and `postgres` connectivity fields. Add `?` to any app for liveness/readiness checks. Docker Compose `app` service includes a HEALTHCHECK stanza (same pattern as `db`/`redis`). Dockerfile has `HEALTHCHECK` instruction.
 
-## Open Tier C items (needs Ahmed's sign-off)
+## Tier C disposition
 
-- **`POST /widgets` status code** — Plan (`docs/implementation-plan.md` §4.2 line 383) says `400` for validation errors but code returns `422` (FastAPI default). Two options: update the plan to `422`, or add a `RequestValidationError` handler returning `400`. See `docs/reviews/m1-architecture.md` Tier C table for full entry.
+- **`POST /widgets` status code** — Plan originally specified `400` for validation errors; code returns `422` (FastAPI default). **RESOLVED (M17, plan update):** `422` is the correct semantic code for schema-validation failures, so the plan was corrected to `422` (see `docs/implementation-plan.md` M17 update) and the Tier C table in `docs/reviews/m1-architecture.md` records `STATUS: CLOSED — resolved via plan update (M17)`. No open Tier C items remain.

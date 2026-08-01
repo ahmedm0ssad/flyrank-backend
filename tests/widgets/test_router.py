@@ -235,6 +235,8 @@ class TestGetWidget:
         response = client.get(f"/widgets/{uuid.uuid4()}")
         assert response.status_code == 404
 
+    # Cross-tenant reads deliberately return 404 (not 403) so existence is not
+    # leaked to other tenants; the test name predates that leak-safe behavior.
     def test_get_widget_403_wrong_tenant(self, client, _mock_auth_and_service):
         mock_service, _mock_user = _mock_auth_and_service
         mock_service.get_widget.return_value = None
