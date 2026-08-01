@@ -30,6 +30,8 @@ endpoints:
     description: List / create widgets (tenant-isolated)
   - path: GET|PUT|DELETE /widgets/{id}
     description: Get / update (bumps js_version) / soft-delete a widget
+  - path: GET /widgets/{id}/embed
+    description: Embed snippet HTML for a widget (auth, tenant-scoped)
   # Owner dashboard — Bearer auth
   - path: GET /widgets/{id}/leads
     description: Paginated lead list with filters and sorting

@@ -59,6 +59,7 @@ class TestCrossOriginRender:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         assert result.returncode == 0, result.stderr
         urls = json.loads(result.stdout)
@@ -73,9 +74,13 @@ class TestCrossOriginRender:
 class TestGenerateScriptTag:
     def test_basic_script_tag(self):
         tag = generate_script_tag("abc-123", 1)
-        assert 'src="/public/widget/abc-123/widget.js?v=1"' in tag
+        assert 'src="http://localhost:8000/public/widget/abc-123/widget.js?v=1"' in tag
         assert 'data-widget-id="abc-123"' in tag
         assert "defer" in tag
+
+    def test_script_tag_default_base_is_absolute(self):
+        tag = generate_script_tag("wid", 1)
+        assert tag.startswith('<script src="http://')
 
     def test_versioned_url_changes_with_version(self):
         tag_v1 = generate_script_tag("wid", 1)

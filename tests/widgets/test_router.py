@@ -260,6 +260,49 @@ class TestGetWidget:
         assert response.status_code == 422
 
 
+class TestGetWidgetEmbed:
+    def test_get_widget_embed_200(self, client, _mock_auth_and_service):
+        mock_service, mock_user = _mock_auth_and_service
+        widget_id = uuid.uuid4()
+        widget = _make_response(
+            id=str(widget_id),
+            name="Embed Widget",
+            tenant_id=str(mock_user["id"]),
+            js_version=3,
+        )
+        mock_service.get_widget.return_value = widget
+
+        response = client.get(f"/widgets/{widget_id}/embed")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        body = response.text
+        assert (
+            f'src="http://testserver/public/widget/{widget_id}/widget.js?v=3"' in body
+        )
+        assert f'data-widget-id="{widget_id}"' in body
+        assert "defer" in body
+
+    def test_get_widget_embed_404(self, client, _mock_auth_and_service):
+        mock_service, _ = _mock_auth_and_service
+        mock_service.get_widget.return_value = None
+
+        response = client.get(f"/widgets/{uuid.uuid4()}/embed")
+        assert response.status_code == 404
+
+    def test_get_widget_embed_401_without_auth(self, client):
+        from fastapi import HTTPException
+
+        def mock_no_user():
+            raise HTTPException(status_code=401, detail="Access token required")
+
+        app.dependency_overrides[get_current_user] = mock_no_user
+        try:
+            response = client.get(f"/widgets/{uuid.uuid4()}/embed")
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+
 class TestUpdateWidget:
     def test_update_widget_200(self, client, _mock_auth_and_service):
         mock_service, mock_user = _mock_auth_and_service
