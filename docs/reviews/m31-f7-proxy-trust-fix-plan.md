@@ -1,8 +1,9 @@
-# M31 — F7 Fix Plan: Env-Gated Client-IP Resolver (Proxy Trust)
+# M31 — F7 Fix + Live Verification: Env-Gated Client-IP Resolver (Proxy Trust)
 
-**Status**: PLANNED — design + test/verification plan only; no code written yet
+**Status**: COMPLETE — design → implemented → live-verified (run A/B)
 **Date**: 2026-08-01
 **Branch**: `feature/capstone-submission-pack`
+**Commits**: `5697b6c` (fix) · `6b27022` (test) · `ff4a9d4` (docs/plan)
 **Baseline reference**: M30 — F7 still Tier C; 947 passed / 100% coverage mocked.
 **Decision scope**: Fixed by the user. Implement an **app-level client-IP resolver** that honors
 `X-Forwarded-For` **only** when `TRUSTED_PROXY_CIDRS` is set. No compose topology change,
@@ -312,30 +313,102 @@ TRUSTED_PROXY_CIDRS=
 Verbatim pytest invocation from `.github/workflows/ci.yml`:
 
 ```
-947 passed ... TOTAL ... 2896 statements, 0 missing → 100% coverage
+962 passed in 57.48s
+TOTAL ... 2938 statements, 0 missing → 100% coverage
 ```
 
-Expectation post-fix: **947 + 15 passed / 0 failed / 100% coverage** — 14 unit tests in
-`tests/leads/test_client_ip.py` + 1 router test in `tests/leads/test_router.py`.
-`tests/repositories/test_postgres_lead_repo_live.py` remains
+**Verified post-fix: 947 → 962 passed / 0 failed / 100% coverage** — 14 unit tests in
+`tests/leads/test_client_ip.py` + 1 router test in `tests/leads/test_router.py`
+(`app/dependencies/client_ip.py` 41/41). `tests/repositories/test_postgres_lead_repo_live.py` remains
 auto-ignored via `pyproject.toml` `addopts` (unchanged). The pytest command in `ci.yml` is
 **byte-for-byte unchanged**; if it ever diverges from AGENTS.md, `ci.yml` is authoritative.
+Full lint trio (`isort --check-only --diff .`, `black --check --diff .`, `ruff check .`)
+passes on the whole repo. Plain `pytest` adds the live-E2E files (`tests/test_e2e.py`, always
+CI-excluded): 1020 passed, the 11 E2E failures are the pre-existing live-Supabase
+`access_token` dependency, not regressions.
 
 ---
 
-## 9. Commit plan (repo convention: fix + test + docs)
+## Live verification (executed, dev stack, run A/B)
+
+Stack: `docker compose up --build -d` (app 8000 / db 5432 / redis host port 6380), seed
+widget `e335f32a-...`, host worker on all three queues with host-side
+`$env:DATABASE_URL`/`$env:REDIS_URL`. JWT at `%TEMP%\opencode\m29_token.txt` had **expired**
+by this run, so stored-IP and geo evidence was read directly from Postgres (psql) instead of
+the dashboard API — equally authoritative, and cleanup used the same `DELETE` path (the M-series
+batch-delete API was unavailable without a valid token).
+
+### Run A — `TRUSTED_PROXY_CIDRS=172.18.0.0/16` (simulated trusted proxy)
+
+Container env confirmed `TRUSTED_PROXY_CIDRS=172.18.0.0/16`; new resolver code confirmed live
+in the image. Three submits, all `X-Forwarded-For` honored:
+
+| # | XFF sent | HTTP | stored `ip_address` | status / geo_provider | geo country / city / region / isp |
+|---|---|---|---|---|---|
+| 1 | `8.8.8.8` | 201 | **`8.8.8.8`** | enriched / ipinfo | US / Mountain View / California / AS15169 Google LLC |
+| 2 | `8.8.8.8` | 201 | **`8.8.8.8`** | enriched / ipinfo | US / Mountain View / California / AS15169 Google LLC |
+| 3 | `9.9.9.9` | 201 | **`9.9.9.9`** | enriched / ipinfo | US / Ashburn / Virginia / AS19281 Quad9 |
+
+Rate-limit keys (Redis db 0) are **distinct per XFF IP** — pre-fix they were all
+`172.18.0.1`:
+
+```
+ratelimit:global_ip:8.8.8.8:submit = 2
+ratelimit:global_ip:9.9.9.9:submit = 1
+ratelimit:widget_ip:{seed}:8.8.8.8:submit = 2
+ratelimit:widget_ip:{seed}:9.9.9.9:submit = 1
+ratelimit:widget_global:{seed}:submit = 3
+```
+
+**Pass criteria met:** stored IP = XFF value; per-IP rate-limit buckets distinct; geo resolves
+to US for the public IP (the pre-fix null-geo artifact is gone).
+
+### Run B — `TRUSTED_PROXY_CIDRS=` (empty, secure default)
+
+Two submits sent with `X-Forwarded-For: 8.8.8.8`; both stored **`172.18.0.1`** (the direct TCP
+peer / docker gateway), and rate-limit keys reverted to the single shared bucket:
+
+```
+ratelimit:global_ip:172.18.0.1:submit
+ratelimit:widget_ip:{seed}:172.18.0.1:submit
+```
+
+Geo fields all **null** (`geo_country/city/region/isp`) with `geo_provider:"ipinfo"`,
+`status:"enriched"` — the exact pre-fix F7 artifact (private IP → bogon), confirming the
+default preserves prior behavior and the feature is inert until an operator opts in.
+
+### Environment notes (F7-unrelated)
+
+- RQ 2.10 `SimpleWorker` on Windows does **not** auto-requeue jobs parked in the
+  `rq:scheduled:*` registry. Run A's lead #1 hit a transient provider outage (ipapi.co 429 on
+  all three providers), was "scheduled for retry", and stayed parked; it was re-queued
+  manually via `rq.registry.ScheduledJobRegistry.requeue` and then enriched from the geo
+  cache. The other five jobs completed on first attempt. Pre-existing worker behavior, not
+  touched by this fix.
+- `worker.log` contained ipinfo URLs carrying the `IPINFO_TOKEN` query value — **not
+  reproduced here** and deleted with the log at cleanup, matching M30's practice.
+
+### Cleanup
+
+- All verification leads deleted (psql) → 0 remaining; seed widget intact.
+- Host worker stopped; `worker.log`/`worker.err` removed; pid file removed.
+- `docker compose down` (DB volume retained). `.env` left with `TRUSTED_PROXY_CIDRS=`
+  (empty secure default).
+
+---
+
+## 9. Commits (executed)
 
 Per the M28/M30 pattern (one fix commit, one test commit, one docs commit; pre-commit
 guardrail `git status` + `git diff --cached --stat`, never stage `.env`):
 
-1. **`fix(leads): resolve client IP from trusted X-Forwarded-For when TRUSTED_PROXY_CIDRS set (F7)`**
+1. **`5697b6c` `fix(leads): resolve client IP from trusted X-Forwarded-For when TRUSTED_PROXY_CIDRS set (F7)`**
    — `app/dependencies/client_ip.py` (new) + `app/services/lead_service.py:104` call-site
    swap + `.env.example` `TRUSTED_PROXY_CIDRS` entry.
-2. **`test(leads): unit tests for client-IP resolver + trusted-XFF stored-IP router test (F7)`**
-   — `tests/leads/test_client_ip.py` (new) + one case in `tests/leads/test_router.py`.
-   Optional: also run the live run A/B and record output here if the user opts in.
-3. **`docs(reviews): add M31 F7 proxy-trust fix plan`** — this file, plus AGENTS.md env
-   documentation update. Update the F7 row in the next report's findings table (§10).
+2. **`6b27022` `test(leads): unit tests for client-IP resolver + trusted-XFF stored-IP router test (F7)`**
+   — `tests/leads/test_client_ip.py` (new, 14 tests) + one case in `tests/leads/test_router.py`.
+3. **`ff4a9d4` `docs(reviews): add M31 F7 proxy-trust fix plan`** — this file, plus AGENTS.md
+   env documentation. Live run A/B evidence recorded in this report.
 
 ---
 
@@ -343,11 +416,11 @@ guardrail `git status` + `git diff --cached --stat`, never stage `.env`):
 
 | ID | Description | Tier | Disposition |
 |---|---|---|---|
-| F7 | X-Forwarded-For ignored; client IP = direct TCP peer (172.18.0.1 docker gateway) → shared rate-limit bucket, colliding fingerprints, null geo | C (flag) | **ESCALATED to fix per user decision** — planned for M31; env-gated resolver, secure-by-default; pending implementation + live run A/B. Status after sign-off: **CLOSED** once the post-fix live evidence lands. |
+| F7 | X-Forwarded-For ignored; client IP = direct TCP peer (172.18.0.1 docker gateway) → shared rate-limit bucket, colliding fingerprints, null geo | C (flag) | **CLOSED** — env-gated resolver (`app/dependencies/client_ip.py`), secure-by-default; mocked suite 962/100% and live run A/B proof (§Live verification): trust on → XFF IP stored + per-IP buckets + geo US; trust off (default) → direct peer + shared bucket + null geo restored. |
 
-If the user does **not** sign off after the live run (e.g. trusts another mechanism), the
-disposition stays **Tier C CLOSED — resolved via env-gated trust** with this plan as the
-record; if they want uvicorn-level trust instead, the plan is amended before implementation.
+Resolution recorded here: the design decision requested for this Tier C item was **env-gated
+trust** (no uvicorn flag, no compose topology change). Sign-off for the disposition lives in
+this row; the live run A/B evidence is the closure proof.
 
 ---
 
