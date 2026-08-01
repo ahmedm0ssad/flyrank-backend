@@ -1,168 +1,59 @@
-# FlyRank Backend AI
+# FlyRank Capstone — Embeddable Widget & Lead-Capture Platform
 
-A production-ready FastAPI backend that combines task management, web scraping, Supabase authentication, asynchronous AI inference (RQ + Groq), automated PDF report generation, and an embeddable widget platform with spam-protected lead capture.
+> Let a customer define a widget, hand them one line of `<script>`, and safely catch everything the public internet throws back at you — validated, spam-filtered, rate-limited, geo-enriched, stored, and dashboarded.
 
-## Features
+This is the **FlyRank Internship · Backend Track · Capstone** build. It is an
+embeddable widget platform in the same product family as Intercom chat bubbles,
+Mailchimp signup forms, and HubSpot lead popovers: a script snippet, a config
+endpoint, and a hardened public submission API.
 
-✅ FastAPI async REST API
+The customer site is just a plain HTML page on a **second local origin** — no
+hosting, no domain, no real CDN. The grade lives in the backend.
 
-✅ Task CRUD with SQLite / PostgreSQL persistence
+## The mission
 
-✅ Automatic SQLite database creation
+Customers create widgets — signup forms, contact forms, CTA popovers — through an
+authenticated API. Each widget gets a one-line `<script>` tag they paste into any
+website:
 
-✅ Automatic table creation (`CREATE TABLE IF NOT EXISTS`)
-
-✅ One-time database seeding (3 sample tasks, seeded only on first run)
-
-✅ Parameterized SQL queries (SQL injection safe)
-
-✅ Data survives restarts
-
-✅ Supabase JWT authentication (signup, login, logout, protected endpoints)
-
-✅ Robots.txt-compliant web scraper with rate limiting and retries
-
-✅ Async AI inference via RQ (Redis Queue) + Groq, with mock fallback
-
-✅ Job lifecycle management (`queued → started → finished/failed`)
-
-✅ Exponential-backoff retries (10s → 60s → 300s, max 3, 600s timeout)
-
-✅ Idempotent job creation via `Idempotency-Key` header
-
-✅ Automated PDF report generation (ReportLab, served securely)
-
-✅ Embeddable widget (JS bundle + public config endpoint)
-
-✅ Lead capture with origin validation and 3-tier rate limiting
-
-✅ Spam protection: honeypot trap, heuristic spam scoring, fingerprint dedup
-
-✅ Geo enrichment of leads (multi-provider fallback chain)
-
-✅ Fail-open webhook dispatch on submissions
-
-✅ Lead dashboard: search, filter, sort, pagination, stats, CSV export
-
-✅ Redis caching for widget config and lead statistics
-
-✅ 50 KB request body limit middleware
-
-✅ Capstone submission pack (`capstone.yaml`, `EVIDENCE.md`, `BUILDLOG.md`) + demo seed script + second-origin test page
-
-✅ Comprehensive offline test suite (938 passing tests, 100% coverage)
-
-✅ Docker Compose stack and GitHub Actions CI pipeline
-
-## Project Structure
-
-```
-app/
-├── main.py                  # FastAPI app, lifespan, router mounting, /health
-├── core/
-│   ├── database.py          # asyncpg pool (Postgres) / SQLite fallback detection
-│   ├── queue.py             # Redis connection, RQ queues, job CRUD (ai/report/enrichment)
-│   ├── supabase.py          # Supabase client bootstrap
-│   └── worker.py            # Standalone RQ worker entrypoint (3 queues)
-├── dependencies/
-│   ├── auth.py              # Bearer-token auth dependency
-│   ├── embed.py             # Widget origin validation
-│   ├── leads.py             # 3-tier rate limiting + origin checks
-│   └── services.py          # DI providers (repositories, Redis)
-├── middleware/
-│   └── body_limit.py        # ASGI-level 50 KB payload cap
-├── models/                  # Pydantic v2 schemas: task, auth, job, report, scraped_book, widget, lead
-├── repositories/
-│   ├── protocol.py          # Task / Widget / Lead repository Protocols
-│   ├── sqlite_repo.py       # SQLite task repo (default backend)
-│   ├── postgres_repo.py     # PostgreSQL task repo (asyncpg)
-│   ├── widget_repo.py       # In-memory widget repo (dev/tests)
-│   ├── lead_repo.py         # In-memory lead repo (dev/tests)
-│   ├── postgres_widget_repo.py
-│   ├── postgres_lead_repo.py
-│   ├── scraped_book_repo.py # Scraped-book upserts (Postgres only)
-│   └── report_repo.py       # Report CRUD (SQLite + Postgres)
-├── routers/                 # tasks, auth, scrape, ai, reports, widgets, embed, leads
-├── scrapers/
-│   ├── session.py           # HTTP session, robots.txt parser, throttling, retries
-│   ├── parser.py            # HTML parsing of listing + detail pages
-│   ├── cleaner.py           # Field normalization (price, rating, availability)
-│   └── pipeline.py          # Scrape orchestration (pages → books)
-└── services/
-    ├── task_service.py      # Task business logic
-    ├── ai_service.py        # Groq inference call (mock fallback)
-    ├── ai_worker.py         # RQ worker: AI job execution
-    ├── report_service.py    # Report enqueue, metadata, DB aggregation
-    ├── report_worker.py     # RQ worker: PDF generation
-    ├── pdf_generator.py     # ReportLab document builder
-    ├── widget_service.py    # Widget CRUD business logic
-    ├── widget_js.py         # Widget JS bundle renderer
-    ├── embed_service.py     # Public widget config lookup (Redis-cached)
-    ├── lead_service.py      # Lead submission pipeline, stats, CSV export
-    ├── lead_worker.py       # RQ worker: geo enrichment
-    ├── spam_service.py      # Heuristic spam scoring
-    ├── fingerprint_service.py # Submission fingerprint + dedup
-    ├── geo_service.py       # IP geolocation (ipapi.co → ipinfo → ip-api)
-    ├── webhook_service.py   # Fail-open webhook dispatch
-    └── alert.py             # Failure alert stub (CRITICAL log)
-
-tests/                       # ~1,000 unit + integration tests (fully offline)
-db/init.sql                  # PostgreSQL DDL (6 tables + indexes)
-scripts/seed_explain.py      # EXPLAIN ANALYZE index benchmark
-scripts/seed_demo.py         # Deterministic demo-data seeder (Postgres required)
-customer-site/index.html     # Plain HTML "customer site" — renders the widget from a second origin
-capstone.yaml                # Capstone submission manifest (run/seed/test/endpoints)
-EVIDENCE.md                  # One pasted proof per Definition-of-Done checkbox
-BUILDLOG.md                  # Honest AI-usage log
-.github/workflows/ci.yml     # isort → black → ruff → pytest pipeline
+```html
+<script src="http://localhost:8000/public/widget/<widget-id>/widget.js?v=<version>" data-widget-id="<widget-id>" defer></script>
 ```
 
-## Tech Stack
+When a visitor on that external page interacts with the widget, the submission
+travels back to the backend, where it is:
 
-| Component       | Technology                                      |
-|-----------------|-------------------------------------------------|
-| Language        | Python ≥ 3.10 (3.13 in CI / Docker)             |
-| Framework       | FastAPI + Uvicorn                               |
-| Validation      | Pydantic v2                                     |
-| Database        | SQLite (default) / PostgreSQL 16 (asyncpg)      |
-| Cache / Queue   | Redis 7 + RQ                                    |
-| AI Inference    | Groq SDK (default `llama-3.1-8b-instant`, mock fallback) |
-| Authentication  | Supabase Auth (JWT)                             |
-| PDF Generation  | ReportLab                                       |
-| Scraping        | requests + urllib3 retries + BeautifulSoup4 + lxml |
-| Testing         | pytest, pytest-asyncio, pytest-mock, httpx, pytest-cov |
-| Tooling         | Ruff, Black, isort, python-dotenv               |
-| Container       | Docker + Docker Compose                         |
-| CI              | GitHub Actions                                  |
+1. **Validated at the boundary** — malformed/oversized payloads get clean 4xx JSON errors, never a 500.
+2. **Protected against abuse** — 3-tier rate limiting, a honeypot trap, heuristic spam scoring, and fingerprint dedup.
+3. **Enriched** — IP → geolocation through a provider fallback chain that degrades gracefully.
+4. **Stored** — linked to the right widget and tenant (multi-tenant isolation enforced in every query).
+5. **Shown in a dashboard** — counts over time, per-widget stats, geo breakdown, CSV export.
+
+The application receives requests directly from browsers you don't control. That
+single fact drives every design decision below: the input can't be trusted, the
+traffic can't be controlled, and the origin can't be predicted.
+
+## The five moving parts
+
+Build order mirrors the capstone brief (§4):
+
+| # | Part | Teaches |
+|---|------|---------|
+| 1 | **Widget management API** — authenticated, tenant-isolated CRUD for widgets (type, fields, button text, display options) | Multi-tenant CRUD + auth |
+| 2 | **Embed snippet generation** — the one-line `<script>` that loads the widget bundle | Developer experience |
+| 3 | **Fast, cached widget delivery** — versioned JS bundle (1-year immutable cache) + short-lived cached config | HTTP caching + versioned assets |
+| 4 | **Public submission endpoint** — CORS (incl. preflight), boundary validation, honest 4xx/429 codes | CORS + boundary validation |
+| 5 | **Protection, enrichment & safe side effects** — rate limits, spam controls, geo fallback chain, fail-open webhook | Abuse resistance + graceful degradation |
+| 6 | **Owner dashboard API** — submissions, stats, geo breakdown, CSV export | Aggregation queries |
 
 ## Architecture
-
-The API follows a strict layered design so each concern is isolated and independently testable:
-
-```
-Client
-  ↓
-FastAPI Router    — HTTP contract: validation, status codes, auth dependencies
-  ↓
-Service Layer     — business rules: seeding, job lifecycle, spam scoring, stats
-  ↓
-Repository Layer  — data access via Protocol-typed repositories (parameterized SQL)
-  ↓
-SQLite tasks.db / PostgreSQL
-```
-
-- **Routers** parse requests, enforce auth, and translate HTTP errors — no business logic.
-- **Services** hold the business rules (e.g. the lead submission pipeline, job lifecycle).
-- **Repositories** implement a shared Protocol (`app/repositories/protocol.py`) so the SQLite, PostgreSQL, and in-memory backends are interchangeable without touching upper layers.
-
-### Embeddable widget architecture (capstone)
 
 Three request paths, one per actor — keep them separate and the code stays clean:
 
 ```
 Widget Owner (authenticated)
   └─► Widget Management API ─► Widget DB (tenant-isolated) ─► embed snippet
-                            (/widgets CRUD)
+                            (/widgets CRUD · /widgets/{id}/embed)
 
 Customer Website (any origin)
   └─ <script src=".../public/widget/{id}/widget.js?v=N">   ← one line
@@ -184,239 +75,291 @@ Widget Owner (authenticated)
       (/widgets/{id}/leads · /widgets/{id}/stats · /widgets/{id}/export · /leads · /leads/stats)
 ```
 
-### Background jobs
+The code itself is strictly layered so each concern is isolated and independently
+testable:
 
-Long-running work (AI inference, PDF reports, lead enrichment) runs asynchronously on RQ:
+```
+Client
+  ↓
+FastAPI Router    — HTTP contract: validation, status codes, auth dependencies
+  ↓
+Service Layer     — business rules: submission pipeline, spam scoring, stats
+  ↓
+Repository Layer  — data access via Protocol-typed repositories (parameterized SQL)
+  ↓
+SQLite / PostgreSQL
+```
 
-1. `POST /ai`, `POST /reports`, or a lead submission enqueues a job on `ai-jobs`, `report-jobs`, or `enrichment-jobs`.
-2. The API returns `202 Accepted` immediately with a `job_id`; state lives in Redis under `job:{id}` / `report_job:{id}` / `enrichment_job:{id}`.
-3. A worker transitions the status `queued → started → finished/failed` and stores the result or error.
-4. Failures retry with exponential backoff (10s → 60s → 300s, max 3) before the job is marked failed and an alert is raised.
+- **Routers** parse requests, enforce auth, and translate HTTP errors — no business logic.
+- **Services** hold the business rules (e.g. the lead submission pipeline).
+- **Repositories** implement a shared Protocol (`app/repositories/protocol.py`) so the SQLite, PostgreSQL, and in-memory backends are interchangeable without touching upper layers.
 
-### Widget submission pipeline
+## Features
 
-`POST /public/widget/{id}/submit` runs every submission through a defense-in-depth chain:
+**Widget platform (capstone)**
+- Authenticated, tenant-isolated widget CRUD with honest status codes (`201/200/204/404/409/422`)
+- Per-widget embed snippet endpoint (`GET /widgets/{id}/embed`)
+- Public config endpoint — small JSON payload, `Cache-Control: public, max-age=300`, 5-min Redis cache
+- Versioned widget JS bundle — `Cache-Control: public, max-age=31536000, immutable`, cache-busted via `?v=` on update
+- Public submission endpoint with correct CORS (incl. `OPTIONS` preflight)
+- 3-tier rate limiting (per-IP / per-widget-per-IP / per-widget) in a 60s window, `429` + `Retry-After`
+- Origin validation against the widget's allowed domain (wildcard `*.` supported, `403` on mismatch)
+- Spam controls: honeypot trap, heuristic spam scoring, fingerprint dedup
+- IP → geo enrichment with a provider fallback chain (`ipapi.co → ipinfo → ip-api`), async on RQ
+- Fail-open, fire-and-forget webhook side effect — a failing webhook never blocks a successful submission
+- Owner dashboard API: per-widget + cross-widget lead lists, stats, CSV export, batch delete, re-enrich
+- Redis caching for widget config and lead statistics
 
-1. Widget lookup — unknown or inactive widgets return `404`.
-2. Origin validation — the `Origin`/`Referer` host must match the widget's domain (wildcard `*.` supported); mismatches return `403`.
-3. Rate limiting — three tiers (per-IP, per-widget/IP, per-widget) in a 60s window; excess returns `429` with `Retry-After`.
-4. Honeypot trap — a hidden field that bots fill in; it flags the lead as spam (score `1.0`) and skips enrichment/webhooks.
-5. Fingerprint dedup — identical submissions within the window return the existing lead instead of a duplicate.
-6. Spam scoring — heuristic scoring (URLs, identical fields, non-ASCII avalanches, disposable email domains, malformed phones).
-7. Storage + async side effects — the lead is stored, then geo enrichment is enqueued and any configured webhook is dispatched fire-and-forget.
+**Also in this repo (track assignments, background context)**
+- Task CRUD with SQLite / PostgreSQL persistence, parameterized queries, one-time seeding
+- Supabase JWT authentication (signup, login, logout, protected endpoints)
+- Robots.txt-compliant web scraper with rate limiting and retries
+- Async AI inference via RQ + Groq, with mock fallback (`GROQ_API_KEY` unset)
+- Job lifecycle management (`queued → started → finished/failed`), exponential-backoff retries
+- Idempotent job creation via `Idempotency-Key` header (24h TTL)
+- Automated PDF report generation (ReportLab, served securely)
+- 50 KB request body limit middleware, audit logging of every submission outcome
 
-## Database
+## The $0 stack
 
-### SQLite (`tasks.db` — default)
+| Component | Tool | Notes |
+|-----------|------|-------|
+| Language + framework | Python 3.13 + FastAPI + Uvicorn | Free |
+| Database | PostgreSQL 16 via Docker (SQLite dev fallback) | `docker compose up` |
+| Cache / Queue | Redis 7 + RQ (host port `6380`) | |
+| Geo provider A | ipapi.co | Free, no key |
+| Geo provider B | ipinfo.io | Free token (`IPINFO_TOKEN`) |
+| Geo provider C | ip-api.com | Free, no key, 45 req/min |
+| Email/webhook side effect | Fail-open HTTPS webhook dispatch (console-log friendly) | Failure-tolerance is what's graded |
+| "Customer site" | Plain HTML file on a second local port (`python -m http.server 5500`) | That's your second origin |
+| Repo + CI | GitHub + GitHub Actions | `isort → black → ruff → pytest` |
+| Hosting | None required — everything runs locally | Deploying is optional |
 
-When no `DATABASE_URL` is set the app uses a local SQLite file (`tasks.db`):
+## Project Structure
 
-- **Automatic creation** — the database file is created on first access.
-- **Automatic table creation** — `CREATE TABLE IF NOT EXISTS tasks (...)` on startup.
-- **Automatic seeding** — if the `tasks` table is empty, three sample tasks are inserted (Learn FastAPI, Write tests, Build a project).
-- **Seed once** — seeding is guarded by a row count, so it never runs twice.
-- **Persistence** — data survives restarts because every write is committed to the file.
+```
+app/
+├── main.py                  # FastAPI app, lifespan, router mounting, /health
+├── core/
+│   ├── database.py          # asyncpg pool (Postgres) / SQLite fallback detection
+│   ├── queue.py             # Redis connection, RQ queues, job CRUD (ai/report/enrichment)
+│   ├── supabase.py          # Supabase client bootstrap
+│   └── worker.py            # Standalone RQ worker entrypoint (3 queues)
+├── dependencies/
+│   ├── auth.py              # Bearer-token auth dependency
+│   ├── embed.py             # Widget origin validation
+│   ├── leads.py             # 3-tier rate limiting + origin checks
+│   ├── client_ip.py         # Client-IP resolver (env-gated X-Forwarded-For trust)
+│   └── services.py          # DI providers (repositories, Redis)
+├── middleware/
+│   └── body_limit.py        # ASGI-level 50 KB payload cap
+├── models/                  # Pydantic v2 schemas: widget, lead, task, auth, job, report, scraped_book
+├── repositories/
+│   ├── protocol.py          # Widget / Lead / Task repository Protocols
+│   ├── widget_repo.py       # In-memory widget repo (dev/tests)
+│   ├── lead_repo.py         # In-memory lead repo (dev/tests)
+│   ├── postgres_widget_repo.py
+│   ├── postgres_lead_repo.py
+│   ├── sqlite_repo.py       # SQLite task repo (default backend)
+│   ├── postgres_repo.py     # PostgreSQL task repo (asyncpg)
+│   ├── scraped_book_repo.py # Scraped-book upserts (Postgres only)
+│   └── report_repo.py       # Report CRUD (SQLite + Postgres)
+├── routers/                 # widgets, leads, embed, tasks, auth, scrape, ai, reports
+├── scrapers/                # session, parser, cleaner, pipeline (book scraping)
+└── services/
+    ├── widget_service.py    # Widget CRUD business logic
+    ├── widget_js.py         # Widget JS bundle renderer + embed snippet generator
+    ├── embed_service.py     # Public widget config lookup (Redis-cached)
+    ├── lead_service.py      # Lead submission pipeline, stats, CSV export
+    ├── lead_worker.py       # RQ worker: geo enrichment
+    ├── spam_service.py      # Heuristic spam scoring
+    ├── fingerprint_service.py # Submission fingerprint + dedup
+    ├── geo_service.py       # IP geolocation (ipapi.co → ipinfo → ip-api)
+    ├── webhook_service.py   # Fail-open webhook dispatch
+    ├── task_service.py      # Task business logic
+    ├── ai_service.py        # Groq inference call (mock fallback)
+    ├── ai_worker.py         # RQ worker: AI job execution
+    ├── report_service.py    # Report enqueue, metadata, DB aggregation
+    ├── report_worker.py     # RQ worker: PDF generation
+    ├── pdf_generator.py     # ReportLab document builder
+    ├── scraped_book_service.py
+    └── alert.py             # Failure alert stub (CRITICAL log)
 
-### PostgreSQL
-
-When `DATABASE_URL` is set, the app uses an asyncpg pool. The full schema — `tasks`, `scraped_books`, `reports`, `widgets`, `leads`, `rate_limits` — is defined in `db/init.sql` and applied automatically on first startup via Docker Compose.
-
-## API Endpoints
-
-### System
-
-| Method | Path           | Auth | Description                                  |
-|--------|----------------|------|----------------------------------------------|
-| GET    | `/`            | No   | API info and Redis status                    |
-| GET    | `/health`      | No   | Health check with Redis/Postgres status      |
-| GET    | `/public/info` | No   | Public welcome message                       |
-
-### Tasks
-
-| Method | Path            | Auth | Description                              |
-|--------|-----------------|------|------------------------------------------|
-| GET    | `/tasks`        | No   | List tasks (`?search=&done=`)            |
-| GET    | `/tasks/{id}`   | No   | Get a task by ID                         |
-| POST   | `/tasks`        | No   | Create a task (`201`)                    |
-| PUT    | `/tasks/{id}`   | No   | Update a task                            |
-| DELETE | `/tasks/{id}`   | No   | Delete a task (`204`)                    |
-| GET    | `/stats`        | No   | Task statistics (total / done / pending) |
-
-### Auth
-
-| Method | Path                   | Auth   | Description                           |
-|--------|------------------------|--------|---------------------------------------|
-| POST   | `/auth/signup`         | No     | Create an account (`201`)             |
-| POST   | `/auth/login`          | No     | Sign in, returns access + refresh tokens |
-| POST   | `/auth/logout`         | Bearer | Sign out (`204`)                      |
-| GET    | `/protected/profile`   | Bearer | Current user profile                  |
-| GET    | `/protected/dashboard` | Bearer | User dashboard                        |
-
-### Scraper
-
-| Method | Path        | Auth | Description                          |
-|--------|-------------|------|--------------------------------------|
-| POST   | `/scrape`   | No   | Scrape books (`?max_pages=5`) — Postgres required |
-
-### AI / Background Jobs
-
-| Method | Path             | Auth | Description                              |
-|--------|------------------|------|------------------------------------------|
-| POST   | `/ai`            | No   | Enqueue an AI inference job (`202`, optional `Idempotency-Key` header) |
-| GET    | `/jobs/{job_id}` | No   | Poll job status                          |
-| GET    | `/jobs`          | No   | List recent jobs (`?limit=&offset=`)     |
-
-### Reports
-
-| Method | Path                        | Auth | Description                          |
-|--------|-----------------------------|------|--------------------------------------|
-| POST   | `/reports`                  | No   | Enqueue a PDF report (`202`)         |
-| GET    | `/reports/{job_id}`         | No   | Report status and download URL       |
-| GET    | `/reports/files/{filename}` | No   | Download a generated PDF (path-traversal protected) |
-
-### Widgets
-
-| Method | Path                 | Auth   | Description                                        |
-|--------|----------------------|--------|----------------------------------------------------|
-| GET    | `/widgets`           | Bearer | List widgets (`?search=&active=&page=&page_size=`) |
-| POST   | `/widgets`           | Bearer | Create a widget (`201`)                            |
-| GET    | `/widgets/{widget_id}` | Bearer | Get a widget by ID                               |
-| PUT    | `/widgets/{widget_id}` | Bearer | Update a widget (bumps `js_version`)             |
-| DELETE | `/widgets/{widget_id}` | Bearer | Soft-delete a widget (`204`)                     |
-
-### Public Widget Embed
-
-| Method | Path                                   | Auth | Description                              |
-|--------|----------------------------------------|------|------------------------------------------|
-| GET    | `/public/widget/{id}/config`           | No   | Public widget config (JSON)              |
-| GET    | `/public/widget/{id}/widget.js`        | No   | Embeddable widget JS bundle (1-year immutable cache) |
-| POST   | `/public/widget/{id}/submit`           | No   | Submit a lead from the widget (`201`)    |
-
-### Leads
-
-| Method | Path                                          | Auth   | Description                              |
-|--------|-----------------------------------------------|--------|------------------------------------------|
-| GET    | `/widgets/{id}/leads`                         | Bearer | List widget leads (filters + pagination) |
-| GET    | `/widgets/{id}/leads/{lead_id}`               | Bearer | Get a single lead                        |
-| GET    | `/widgets/{id}/stats`                         | Bearer | Widget lead statistics                   |
-| GET    | `/widgets/{id}/export`                        | Bearer | Export widget leads as CSV               |
-| DELETE | `/widgets/{id}/leads/{lead_id}`               | Bearer | Delete a lead (`204`)                    |
-| POST   | `/widgets/{id}/leads/batch-delete`            | Bearer | Batch delete leads (`204`)               |
-| POST   | `/widgets/{id}/leads/{lead_id}/re-enrich`     | Bearer | Re-run geo enrichment (`202`)            |
-| GET    | `/leads`                                      | Bearer | List leads across all widgets            |
-| GET    | `/leads/stats`                                | Bearer | Global lead statistics                   |
-
-## Example Requests
-
-```bash
-# Tasks — CRUD
-curl http://localhost:8000/tasks
-curl http://localhost:8000/tasks?search=fastapi&done=false
-curl -X POST http://localhost:8000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Design review","done":false}'
-curl -X PUT http://localhost:8000/tasks/4 \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Design review","done":true}'
-curl -X DELETE http://localhost:8000/tasks/4
-curl http://localhost:8000/stats
-
-# Auth
-curl -X POST http://localhost:8000/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"pass123"}'
-curl -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"pass123"}'
-# → {"access_token":"...","refresh_token":"..."}
-curl http://localhost:8000/protected/profile \
-  -H "Authorization: Bearer <access_token>"
-
-# Enqueue an AI job (async)
-curl -X POST http://localhost:8000/ai \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: my-unique-key" \
-  -d '{"prompt":"Summarize FastAPI","model":"llama-3.1-8b-instant"}'
-# → 202 {"job_id":"...","status":"queued","status_url":"/jobs/..."}
-
-# Poll job status
-curl http://localhost:8000/jobs/<job_id>
-
-# Scrape books (Postgres required)
-curl -X POST "http://localhost:8000/scrape?max_pages=3"
-
-# Enqueue a PDF report
-curl -X POST http://localhost:8000/reports
-# → 202 {"job_id":"...","status":"queued"}
-
-# Download the generated PDF
-curl -o report.pdf http://localhost:8000/reports/files/report_<job_id>.pdf
+tests/                       # 962 unit + integration tests (offline, deterministic)
+db/init.sql                  # PostgreSQL DDL (6 tables + indexes)
+scripts/seed_demo.py         # Deterministic demo-data seeder (Postgres required)
+scripts/seed_explain.py      # EXPLAIN ANALYZE index benchmark
+customer-site/index.html     # Plain HTML "customer site" — renders the widget from a second origin
+capstone.yaml                # Capstone submission manifest (run/seed/test/endpoints)
+EVIDENCE.md                  # One pasted proof per Definition-of-Done checkbox
+BUILDLOG.md                  # Honest AI-usage log
+.env.example                 # Every env var with safe placeholder values
+.github/workflows/ci.yml     # isort → black → ruff → pytest pipeline
 ```
 
 ## Running the Project
 
+### 1. Boot the stack (API + Postgres + Redis)
+
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd <repo-dir>
+docker compose up --build
+```
 
-# 2. Install dependencies (Python 3.10+)
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+This starts PostgreSQL 16 (with `db/init.sql` applied), Redis 7 on host port
+`6380`, and the FastAPI app — each with healthchecks. The API is available at
+`http://localhost:8000`, interactive Swagger docs at `http://localhost:8000/docs`.
 
-# 3. Configure environment
+### 2. Configure environment
+
+```bash
 cp .env.example .env
 # Required: SUPABASE_URL, SUPABASE_KEY (the app refuses to start without them)
+```
 
-# 4. Run the API
+### 3. Seed demo data
+
+```bash
+python -m scripts.seed_demo
+```
+
+This requires PostgreSQL, is idempotent, creates a demo tenant, two widgets on
+different domains, and sample leads (valid, enriched, spam-flagged, and
+honeypot-trapped), then prints the generated `<script>` embed tags and the
+dashboard endpoints to hit.
+
+### 4. Serve the "customer site" from a second origin
+
+```bash
+python -m http.server 5500 --directory customer-site
+```
+
+Open `http://localhost:5500/?widget=<widget-id>` in a browser — the widget loads
+from `http://localhost:8000` on a page you didn't build. Submit the form and watch
+the lead appear in the dashboard:
+
+```bash
+curl http://localhost:8000/widgets/<widget-id>/stats -H "Authorization: Bearer <token>"
+```
+
+### Without Docker (dev only)
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-The API is available at `http://localhost:8000` and interactive Swagger docs at `http://localhost:8000/docs`.
-
-### Background worker
-
-Async features (AI jobs, reports, lead enrichment) need Redis and a worker:
+SQLite is the default when no `DATABASE_URL` is set. For the background jobs that
+need Redis + a worker:
 
 ```bash
 docker run -d -p 6380:6379 redis:7-alpine
 python -m app.core.worker
 ```
 
-### Full stack with Docker
+## API Endpoints
+
+### Public widget path (no auth — served to any website)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/public/widget/{id}/config` | Public widget config JSON (`Cache-Control: public, max-age=300`) |
+| GET | `/public/widget/{id}/widget.js` | Versioned embeddable JS bundle (1-year immutable cache) |
+| POST | `/public/widget/{id}/submit` | Public lead submission — validation, origin check, rate limits, spam filter, geo enrichment, webhook (`201`) |
+
+### Widget management (Bearer auth, tenant-isolated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/widgets` | List widgets (`?search=&active=&page=&page_size=`) |
+| POST | `/widgets` | Create a widget (`201`) |
+| GET | `/widgets/{widget_id}` | Get a widget by ID |
+| GET | `/widgets/{widget_id}/embed` | One-line embed `<script>` snippet |
+| PUT | `/widgets/{widget_id}` | Update a widget (bumps `js_version`) |
+| DELETE | `/widgets/{widget_id}` | Soft-delete a widget (`204`) |
+
+### Owner dashboard (Bearer auth)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/widgets/{id}/leads` | List widget leads (filters + pagination + sorting) |
+| GET | `/widgets/{id}/leads/{lead_id}` | Get a single lead |
+| GET | `/widgets/{id}/stats` | Widget lead statistics (counts over time, geo breakdown) |
+| GET | `/widgets/{id}/export` | Export widget leads as CSV (`X-Export-Truncated` on cap) |
+| DELETE | `/widgets/{id}/leads/{lead_id}` | Delete a lead (`204`) |
+| POST | `/widgets/{id}/leads/batch-delete` | Batch delete leads (`204`) |
+| POST | `/widgets/{id}/leads/{lead_id}/re-enrich` | Re-run geo enrichment (`202`) |
+| GET | `/leads` | List leads across all widgets |
+| GET | `/leads/stats` | Global lead statistics |
+
+### Also in this repo
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` `/health` `/public/info` | API info, health (Redis/Postgres status), public welcome |
+| GET/POST/PUT/DELETE | `/tasks`, `/tasks/{id}` | Task CRUD + `/stats` |
+| POST | `/auth/signup` `/auth/login` `/auth/logout` | Supabase JWT auth |
+| GET | `/protected/profile` `/protected/dashboard` | Protected user endpoints |
+| POST | `/scrape` | Scrape books (Postgres required) |
+| POST | `/ai`; GET `/jobs/{id}`, `/jobs` | Async AI inference jobs |
+| POST | `/reports`; GET `/reports/{job_id}`, `/reports/files/{filename}` | PDF report jobs |
+
+## Example Requests
 
 ```bash
-docker compose up --build
+# Create a widget (authenticated)
+curl -X POST http://localhost:8000/widgets \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Contact Form",
+    "domain": "https://myshop.com",
+    "config": {
+      "button_text": "Get a Quote",
+      "brand_color": "#2563eb",
+      "fields": ["name", "email", "phone"],
+      "success_message": "Thanks! We will be in touch."
+    }
+  }'
+
+# Get the embed snippet
+curl http://localhost:8000/widgets/<widget-id>/embed \
+  -H "Authorization: Bearer <token>"
+# → <script src="http://localhost:8000/public/widget/<id>/widget.js?v=1" ...></script>
+
+# Fetch public config
+curl http://localhost:8000/public/widget/<widget-id>/config
+
+# Submit a lead from the second-origin page
+curl -X POST http://localhost:8000/public/widget/<widget-id>/submit \
+  -H "Content-Type: application/json" \
+  -H "Origin: https://myshop.com" \
+  -d '{"form_data":{"name":"Ana","email":"ana@example.com","phone":"+15551234567"},"referer":"https://myshop.com/"}'
+# → 201 {"success":true,"message":"Thank you for your submission","lead_id":"..."}
+
+# Watch it land in the dashboard
+curl http://localhost:8000/widgets/<widget-id>/stats -H "Authorization: Bearer <token>"
+curl http://localhost:8000/widgets/<widget-id>/leads -H "Authorization: Bearer <token>"
 ```
 
-This starts PostgreSQL 16 (with `db/init.sql` applied), Redis 7 on host port `6380`, and the app — each with healthchecks.
+## The submission pipeline (defense in depth)
 
-### Seed demo data & run the widget demo
+`POST /public/widget/{id}/submit` runs every submission through the chain:
 
-1. Boot the stack: `docker compose up --build` (Postgres is required so the demo data persists).
-2. Seed a demo tenant, two widgets, and sample leads (idempotent):
-
-   ```bash
-   python -m scripts.seed_demo
-   ```
-
-   It prints the generated `<script>` embed tags and the dashboard endpoints to hit.
-3. Serve the plain-HTML "customer site" from a **second origin**:
-
-   ```bash
-   python -m http.server 5500 --directory customer-site
-   ```
-
-4. Open `http://localhost:5500/?widget=<widget-id>` in a browser — the widget loads from `http://localhost:8000` on a page you didn't build. Submit the form and watch the lead appear in the dashboard (authenticated):
-
-   ```bash
-   curl http://localhost:8000/widgets/<widget-id>/stats -H "Authorization: Bearer <token>"
-   ```
+1. **Widget lookup** — unknown or inactive widgets return `404`.
+2. **Origin validation** — the `Origin`/`Referer` host must match the widget's domain (wildcard `*.` supported); mismatches return `403`.
+3. **Rate limiting** — three tiers (per-IP, per-widget/IP, per-widget) in a 60s window; excess returns `429` with `Retry-After`. The per-IP identity is the direct TCP peer by default, or the trusted `X-Forwarded-For` client when `TRUSTED_PROXY_CIDRS` is set (see `app/dependencies/client_ip.py`).
+4. **Honeypot trap** — a hidden field that bots fill in; it flags the lead as spam (score `1.0`) and skips enrichment/webhooks.
+5. **Fingerprint dedup** — identical submissions within the window return the existing lead instead of a duplicate.
+6. **Spam scoring** — heuristic scoring (URLs, identical fields, non-ASCII avalanches, disposable email domains, malformed phones).
+7. **Storage + async side effects** — the lead is stored, then geo enrichment is enqueued (`enrichment-jobs`) and any configured webhook is dispatched fire-and-forget (fail-open, never blocks success).
 
 ## Running Tests
 
-The full test suite runs fully offline using in-memory repositories and fake Redis/RQ (no network, no Docker required):
+The full suite runs fully offline using in-memory repositories and fake
+Redis/RQ (no network, no Docker, no credentials required). Latest recorded CI
+result: **962 passed, 100% coverage**.
 
 ```bash
 pytest
@@ -440,7 +383,13 @@ python -m pytest \
   --cov=app --cov-report=term-missing --tb=short -v
 ```
 
-Latest recorded CI result: **938 passed, 100% coverage** (offline, fully deterministic — no network, Docker, or credentials needed). `tests/test_db_schema.py` requires a live Postgres, and `tests/test_e2e.py` / `tests/test_ai_e2e.py` require real Supabase/Redis — all three are excluded from CI.
+The tests cover the scary cases the brief demands: CORS preflight, invalid
+payloads (`422`), oversized payloads (`413`), rate-limit bursts (`429` +
+`Retry-After`), honeypot/spam blocking, geo provider fallback (A down → B answers;
+all down → still `201`), a failing webhook not blocking success, and widget
+rendering on a second-origin page (Node DOM/XHR harness). `tests/test_db_schema.py`
+needs a live Postgres and the E2E tests need real Supabase/Redis — all excluded
+from CI.
 
 Run a single test file:
 
@@ -448,63 +397,38 @@ Run a single test file:
 pytest tests/routers/test_ai.py -v
 ```
 
-## SQL Example
+## Definition of Done
 
-```sql
-SELECT * FROM tasks WHERE done = 1;
-```
+Every box in the capstone brief §6 is ticked, with one pasted proof each in
+[`EVIDENCE.md`](EVIDENCE.md). The proofs come from a single offline run of the
+exact CI `test:` command in `capstone.yaml` — any evaluator can reproduce them.
 
-Returns every task marked as complete. This is the exact query shape used by the repository layer (`app/repositories/sqlite_repo.py`) to compute task statistics — all queries are parameterized with `?` placeholders to prevent SQL injection.
+The acceptance probes from §12 all pass:
+- **Probe 1** — a valid submission from the second-origin page is stored, `2xx`, visible via the dashboard API.
+- **Probe 2** — malformed and oversized payloads get clean 4xx JSON errors, never a 500.
+- **Probe 3** — a burst of rapid submissions gets `429`s; a normal request right after still succeeds.
+- **Probe 4** — geo provider A down → submission enriched by provider B; both down → stored anyway, without geo.
+- **Probe 5** — a forced webhook failure still stores the submission and returns success.
+- **Probe 6** — a filled honeypot field is silently dropped/rejected.
 
-## Database Screenshot
+## Submission pack (GitHub rules §11)
 
-> Placeholder — add `docs/database.png` showing the `tasks` table populated with the seeded rows (e.g. from the SQLite CLI or a DB browser).
-
-## Assignment Requirements Mapping
-
-| Requirement (implementation-plan.md) | Status | Implementation |
-|--------------------------------------|--------|----------------|
-| M1 — Database schema & migrations (`widgets`, `leads`, `rate_limits`) | ✅ Implemented | `db/init.sql`, `app/core/database.py` |
-| M2 — Widget CRUD: repository + service + router | ✅ Implemented | `app/repositories/{widget_repo,postgres_widget_repo}.py`, `app/services/widget_service.py`, `app/routers/widgets.py` |
-| M3 — Public embed endpoints (config, widget.js) | ✅ Implemented | `app/routers/embed.py`, `app/services/{embed_service,widget_js}.py`, `app/dependencies/embed.py` |
-| M4 — Lead capture submission pipeline | ✅ Implemented | `app/routers/leads.py`, `app/services/{lead_service,spam_service,fingerprint_service}.py`, `app/dependencies/leads.py`, `app/middleware/body_limit.py` |
-| M5 — Geo enrichment background jobs | ✅ Implemented | `app/services/{geo_service,lead_worker}.py`, `app/core/queue.py` |
-| M6 — Lead dashboard APIs (stats, export, batch ops) | ✅ Implemented | `app/routers/leads.py`, `app/services/lead_service.py`, `app/repositories/lead_repo.py` |
-| M7 — Security hardening (origin edge cases, audit logging) | ✅ Implemented | `app/dependencies/embed.py`, `app/services/lead_service.py` (audit logger) |
-| M8 — Testing completion & CI | ✅ Implemented | `tests/` (886+ passing tests), `.github/workflows/ci.yml` |
-
-## Optional Features
-
-- **Search** — tasks by title; widgets and leads by keyword
-- **Filtering** — leads by status, spam score range, and date range; tasks by `done`
-- **Sorting** — leads by any field, ascending or descending
-- **Pagination** — widgets and leads (`page`, `page_size`, max 100)
-- **Statistics** — task stats (`/stats`), per-widget and global lead stats
-- **Timestamps** — `created_at` / `updated_at` on every model, auto-maintained
-- **CSV export** — per-widget lead export with a 10,000-row cap (`X-Export-Truncated` header)
-- **Caching** — Redis caching for widget config and lead stats (5-min TTL), 24h geo lookups
-- **Idempotency** — `Idempotency-Key` header deduplicates AI job creation (24h TTL)
-- **Webhooks** — optional per-widget HTTPS webhook, dispatched fire-and-forget
-- **Protections** — honeypot trap, heuristic spam scoring, fingerprint dedup, 3-tier rate limiting, origin validation
-- **Audit logging** — every submission outcome (success / blocked / spam) is logged as JSON
-
-## Testing Strategy
-
-- **Unit tests** — models, services, repositories, scrapers, and middleware in isolation; SQLite repos are exercised against a temporary database (`tmp_path`), so each run starts clean.
-- **Integration tests** — router + service + repository flows through the FastAPI `TestClient`, covering the full widget submission pipeline and background-job lifecycle.
-- **End-to-end tests** — `tests/test_e2e_widget.py` (offline, in CI) drives create-widget → submit-lead → enrichment; `tests/test_e2e.py` and `tests/test_ai_e2e.py` require live Supabase/Redis/server and are excluded from CI.
-- **Offline fakes** — `tests/conftest.py` installs `_FakeRedis` and `_FakeQueue` and patches all `is_postgres_enabled` calls, so the suite never touches the network.
-- **Repository swapping** — the Repository Protocol lets tests substitute in-memory or SQLite implementations for any data access layer.
-- **Isolation** — every test resets fake state via autouse fixtures; no cross-test pollution.
-- **Coverage** — CI enforces coverage reporting (`--cov=app --cov-report=term-missing`); latest run measures 100% statement coverage.
+| File | What's in it |
+|------|--------------|
+| `README.md` | This file — what the system does, architecture, run + seed steps, honest limitations |
+| `capstone.yaml` | Machine-readable manifest: `run:` / `seed:` / `test:` / `base_url:` + endpoints to probe |
+| `EVIDENCE.md` | One pasted proof per Definition-of-Done checkbox |
+| `BUILDLOG.md` | Honest AI-usage log — where AI helped, where it was wrong, what I changed |
+| `.env.example` | Every env var with safe placeholder values |
 
 ## Design Decisions
 
 - **SQLite by default** — zero-config, file-based persistence for local development; PostgreSQL via `DATABASE_URL` when needed, selected at import time in `app/core/database.py`.
 - **Repository pattern** — data access is behind Protocol-typed repositories (`app/repositories/protocol.py`), making SQLite/Postgres/in-memory backends swappable and trivially testable.
 - **Parameterized queries** — all SQL uses `?` / `$n` placeholders; user input is never string-interpolated into queries.
-- **Automatic initialization** — `tasks.db` and tables are created on first access; `db/init.sql` seeds the Postgres schema in Docker.
-- **One-time seeding** — sample tasks are inserted only when the table is empty, so seed data never duplicates across restarts.
+- **Boundary validation** — every public payload is validated (Pydantic + manual body parse) before it touches business logic; the server never trusts the client.
+- **Fail-open side effects** — enrichment and webhooks run after the row is stored; a dead dependency degrades the response, never destroys it.
+- **Versioned delivery** — the JS bundle URL changes on every edit (`?v=` cache-bust), so browsers cache it forever without serving stale code.
 - **Async everywhere** — SQLite calls run in a threadpool (`run_in_threadpool`) so the event loop stays responsive.
 
 ## Future Improvements
@@ -531,8 +455,8 @@ Honest scoping, in the spirit of the capstone brief (§7):
   Correct for a public widget path; an origin allow-list per tenant would be a
   production hardening step.
 - **`POST /widgets` returns `422`** for validation errors (FastAPI default),
-  while the original implementation plan specified `400`. Tracked in
-  `docs/reviews/m1-architecture.md`.
+  while the original implementation plan specified `400` — resolved with `422` as
+  the correct semantic code for schema-validation failures.
 - **Rate limits are process-local when Redis is unavailable** — a bounded LRU
   fallback (`app/dependencies/leads.py`), which degrades safely but is not a
   distributed limiter.
