@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -366,3 +367,83 @@ class TestPostgresLeadRepositoryLive:
         assert isinstance(row["id"], UUID)
         assert isinstance(row["ip_address"], str)
         assert row["form_data"]["name"] == "Export 1"
+
+    def test_f9_second_asyncio_run_reuses_closed_loop_pool(self):
+        """F9 regression (live Postgres).
+
+        RQ calls the enrichment job function once per job, and that function
+        wraps every DB op in its own asyncio.run() (see
+        app/services/lead_worker.py run_enrichment_job). The module-level
+        asyncpg pool is therefore created on the first asyncio.run()'s loop and
+        left bound to it after that loop closes. A second asyncio.run() for the
+        same job must still work: get_pool() must detect the loop change and
+        recreate the pool. Pre-fix the second run reuses the stale pool and
+        raises InterfaceError / 'Event loop is closed'; post-fix it succeeds.
+
+        Mirrors the M29 repro exactly: run #1 (create) succeeds, run #2
+        (get_by_id + update_status) is where the bug surfaced.
+        """
+        from app.core import database as db
+
+        def _run1() -> str:
+            db._pool = None
+            db._pool_loop = None
+
+            async def _body() -> str:
+                pool = await db.get_pool()
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "DELETE FROM widgets WHERE id = $1", UUID(WIDGET_ID)
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO widgets (id, tenant_id, name, domain, config)
+                        VALUES ($1, $2, $3, $4, $5::jsonb)
+                        """,
+                        UUID(WIDGET_ID),
+                        UUID(TENANT_ID),
+                        "f9-live-test-widget",
+                        WIDGET_DOMAIN,
+                        '{"brand_color": "#2563eb"}',
+                    )
+                repo = PostgresLeadRepository()
+                lead = await repo.create(
+                    widget_id=WIDGET_ID,
+                    tenant_id=TENANT_ID,
+                    form_data=_form(name="F9 Second Run"),
+                    ip_address="203.0.113.200",
+                    fingerprint="fp-f9-live",
+                )
+                return str(lead.id)
+
+            return asyncio.run(_body())
+
+        def _run2(lead_id: str) -> None:
+            repo = PostgresLeadRepository()
+            lead = asyncio.run(repo.get_by_id(lead_id))
+            assert lead is not None
+            assert lead.status == "pending"
+            updated = asyncio.run(
+                repo.update_status(lead_id, "enriched", geo_country="United States")
+            )
+            assert updated is not None
+            assert updated.status == "enriched"
+            assert updated.geo_country == "United States"
+
+        def _cleanup(lead_id: str) -> None:
+            async def _inner() -> None:
+                pool = await db.get_pool()
+                async with pool.acquire() as conn:
+                    await conn.execute("DELETE FROM leads WHERE id = $1", lead_id)
+                    await conn.execute(
+                        "DELETE FROM widgets WHERE id = $1", UUID(WIDGET_ID)
+                    )
+                await db.close_pool()
+
+            asyncio.run(_inner())
+
+        lead_id = _run1()
+        try:
+            _run2(lead_id)
+        finally:
+            _cleanup(lead_id)
