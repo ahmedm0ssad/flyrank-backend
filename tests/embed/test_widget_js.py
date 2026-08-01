@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -68,6 +69,66 @@ class TestCrossOriginRender:
             assert host == API_HOST, (
                 f"{key} URL resolved to {host}, expected {API_HOST} "
                 f"(script origin, not the embedding page origin)"
+            )
+
+    @pytest.mark.skipif(
+        shutil.which("node") is None,
+        reason="node runtime not available for bundle execution harness",
+    )
+    def test_config_and_submit_honor_data_api_base_override(self, tmp_path):
+        bundle = tmp_path / "widget.js"
+        bundle.write_text(render_widget_js("abc", {}, 1), encoding="utf-8")
+
+        env = dict(os.environ)
+        env["HARNESS_SCRIPT_SRC"] = (
+            "https://api.flyrank.example/public/widget/abc/widget.js?v=3"
+        )
+        env["HARNESS_API_BASE_OVERRIDE"] = "https://override.example"
+        result = subprocess.run(
+            [shutil.which("node"), str(HARNESS), str(bundle)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=env,
+        )
+        assert result.returncode == 0, result.stderr
+        urls = json.loads(result.stdout)
+        for key in ("config", "submit"):
+            host = urlparse(urls[key]).hostname
+            assert host == "override.example", (
+                f"{key} URL resolved to {host}, expected override.example "
+                f"(data-api-base override takes precedence over script src)"
+            )
+
+    @pytest.mark.skipif(
+        shutil.which("node") is None,
+        reason="node runtime not available for bundle execution harness",
+    )
+    def test_config_and_submit_fall_back_to_page_origin_without_current_script(
+        self, tmp_path
+    ):
+        bundle = tmp_path / "widget.js"
+        bundle.write_text(render_widget_js("abc", {}, 1), encoding="utf-8")
+
+        env = dict(os.environ)
+        env["HARNESS_NO_CURRENT_SCRIPT"] = "1"
+        result = subprocess.run(
+            [shutil.which("node"), str(HARNESS), str(bundle)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=env,
+        )
+        assert result.returncode == 0, result.stderr
+        urls = json.loads(result.stdout)
+        for key in ("config", "submit"):
+            host = urlparse(urls[key]).hostname
+            assert host == "customer-site.example", (
+                f"{key} URL resolved to {host}, expected customer-site.example "
+                f"(page-origin fallback only when currentScript is absent, i.e. "
+                f"dynamically-injected scripts outside the documented pattern)"
             )
 
 

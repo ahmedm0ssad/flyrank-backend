@@ -3,9 +3,15 @@ const fs = require("fs");
 const bundlePath = process.argv[2];
 const src = fs.readFileSync(bundlePath, "utf8");
 
-const SCRIPT_SRC = "https://api.flyrank.example/public/widget/abc/widget.js?v=3";
-const PAGE_HREF = "https://customer-site.example/contact";
-const PAGE_ORIGIN = "https://customer-site.example";
+const SCRIPT_SRC =
+  process.env.HARNESS_SCRIPT_SRC ||
+  "https://api.flyrank.example/public/widget/abc/widget.js?v=3";
+const PAGE_HREF =
+  process.env.HARNESS_PAGE_HREF || "https://customer-site.example/contact";
+const PAGE_ORIGIN =
+  process.env.HARNESS_PAGE_ORIGIN || "https://customer-site.example";
+const API_BASE_OVERRIDE = process.env.HARNESS_API_BASE_OVERRIDE || "";
+const NO_CURRENT_SCRIPT = process.env.HARNESS_NO_CURRENT_SCRIPT === "1";
 
 const captured = { config: null, submit: null };
 const createdForms = [];
@@ -37,12 +43,14 @@ function makeElement(tag) {
 }
 
 const document = {
-  currentScript: {
-    src: SCRIPT_SRC,
-    getAttribute() {
-      return null;
-    },
-  },
+  currentScript: NO_CURRENT_SCRIPT
+    ? null
+    : {
+        src: SCRIPT_SRC,
+        getAttribute() {
+          return API_BASE_OVERRIDE || null;
+        },
+      },
   createElement: makeElement,
   getElementById() {
     return { style: {}, textContent: "" };
