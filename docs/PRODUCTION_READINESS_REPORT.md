@@ -418,3 +418,75 @@ All documentation gaps are Tier C (requires sign-off).
 ---
 
 *End of Production Readiness Report. 619 tests passing (M9 live-verified on Postgres: /health returns "connected" ✓, config returns as dict ✓, submit returns 201 ✓, PUT succeeds ✓, origin-bypass returns 403 ✓ — first-ever successful origin-verification on Postgres, previously blocked by #28 500). 28 Tier C items awaiting sign-off (1 duplicate removed M8.1). Both critical Postgres bugs (#27, #28) fixed in M9 (see §5).*
+
+---
+
+## 14. Addendum — Capstone-Brief Audit (M22–M25) Closure
+
+*Date: 2026-08-01 · Added by Milestone 26 (Final Closure Addendum)*
+
+This addendum is added **after** the M8 report was written (M8 was generated
+2026-07-29; the capstone-brief audit ran 2026-08-01) and **does not** modify,
+renumber, or restate any section above. The M8 report therefore **predates**
+the capstone-brief-specific audit and does not reflect findings F1–F5 or their
+resolution; readers should treat the sections above as the internal
+implementation-plan audit series (M1–M21) and this addendum as the record of a
+separate, later audit and its closure.
+
+**What triggered this.** A separate audit of the capstone submission brief
+(`docs/reviews/capstone-review-audit.md`, M22) was conducted independently of
+the internal implementation-plan audit series above. It reconstructed the
+brief's Definition-of-Done checkboxes and acceptance probes from
+`EVIDENCE.md` / `capstone.yaml` (the brief itself is external to the repo) and
+found gaps the internal series did not check for: one **Major** finding (F1 —
+the widget bundle used origin-relative URLs, breaking the documented
+cross-origin render claim, DoD #6) and four **Minor** findings (F2–F5). All
+five, plus the fallback-chain verification sub-item surfaced during M24's
+review, are now resolved. Their resolution was tracked across three follow-up
+documents (M23, M24, M25); this addendum consolidates and cross-references the
+outcome so a reader of this report can find it without reading all follow-ups
+in order.
+
+### 14.1 Closing table (copied verbatim from M25 §6)
+
+| # | Finding | Original severity | Fix commit(s) | Current status |
+|---|---|---|---|---|
+| F1 | Widget bundle uses origin-relative URLs (cross-origin render broken) | Major | `33a0e5e` (M24) | **Fixed** — re-verified live in M25 (DoD #6 harness output, §5) |
+| F1 sub-item | Fallback-chain verification gap: `data-api-base` override and `window.location.origin` untested | — (sub-item of F1) | `b809413` (M25) | **Verified-fixed** — both branches covered by real execution tests (§2) |
+| F2 | Test name `test_get_widget_403_wrong_tenant` asserts 404 | Minor | `950f9b3` (M25) | **Fixed** — intent documented; assertion/response unchanged |
+| F3 | EVIDENCE.md `embed.py` line citation stale (`:54` → `:63`) | Minor | `33a0e5e` (M24) | **Verified-fixed** — direct file check confirms `:63` and softened prose (§1) |
+| F4 | AGENTS.md lists `POST /widgets` status code as open Tier C | Minor | `950f9b3` (M25) | **Closed** — marked RESOLVED via M17 plan update, citing plan:7 + m1-architecture:113 (§1) |
+| F5 | `generate_script_tag` unreachable + default `base_url=""` | Minor | `cdfe4f9` (M24) | **Fixed** — exposed at `GET /widgets/{id}/embed`, default `DEFAULT_API_BASE_URL` |
+
+### 14.2 Evidence-trail pointers (jump straight to the right document)
+
+| Finding | Where the full evidence trail lives |
+|---|---|
+| F1 | M22 §7 (finding) → M24 commit `33a0e5e` (fix) → M25 §5 (DoD #6 re-verification, literal harness output) and M25 §6 (closing row). No standalone M24 doc exists — the fix record is the commit plus `EVIDENCE.md:100-104`. |
+| F1 sub-item | M25 §2 (fallback-chain tests + literal outputs for the override and page-origin branches). |
+| F2 | M22 §7 (finding) → M25 §1 (resolution in commit `950f9b3`). |
+| F3 | M22 §7 (finding) → M25 §1 (verified already closed in commit `33a0e5e`). |
+| F4 | M22 §7 (finding) → M25 §1 (resolution in commit `950f9b3`; underlying closure at M17, `docs/reviews/m1-architecture.md:113`). |
+| F5 | M22 §7 (finding) → M24 commit `cdfe4f9` (fix) → M25 §6 (closing row). |
+
+Supporting baselines: M22 §8 recorded `938 passed / 2873 stmts / 100%` and M23
+(`docs/reviews/m23-ci-reconciliation.md`) independently confirmed the same
+under the authoritative CI command.
+
+### 14.3 Final test verification (copied verbatim from M25 §3)
+
+| Metric | M23 baseline | M24 result | **M25 result** |
+|---|---|---|---|
+| Passed | 938 | 944 | **946** |
+| Failed | 0 | 0 | **0** |
+| Skipped | 0 | 0 | **0** |
+| Errors | 0 | 0 | **0** |
+| Coverage | 2873 stmts, 100% | 2885 stmts, 100% | **2885 stmts, 100%** |
+| Duration | 42.84s (EVIDENCE.md: 36.88s) | 37.55s | **40.26s** |
+
+### 14.4 Current overall status
+
+**All findings from both audit series are closed — 0 open items** — as of the
+M25 commits (`950f9b3`, `b809413`). The M1–M21 Tier C disposition table has
+0 remaining open items, and M22's F1–F5 (plus the fallback-chain sub-item) are
+all Fixed / Verified-fixed / Closed.
