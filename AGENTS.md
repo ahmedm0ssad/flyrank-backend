@@ -75,6 +75,23 @@ Single-file: `pytest tests/routers/test_ai.py -v` (works for any test path).
 - **Docker Redis**: mapped to host port **6380** (not 6379). Postgres on 5432.
 - **Groq mock**: when `GROQ_API_KEY` is unset, `call_ai` returns `"Mock response to: {prompt}"`.
 
+## Client IP / proxy trust (`TRUSTED_PROXY_CIDRS`)
+
+- **One resolver drives everything**: `app/dependencies/client_ip.py::get_client_ip(request)` feeds the
+  rate-limit keys (`app/dependencies/leads.py`), the fingerprint, the stored `lead.ip_address`, and
+  therefore geo enrichment. Fix IP resolution once here and all side effects follow.
+- **Secure by default**: `TRUSTED_PROXY_CIDRS` unset/empty → `X-Forwarded-For` is **ignored** and the
+  direct TCP peer (`request.client.host`) is returned, preserving pre-F7 behavior. Do not trust the
+  header without setting this.
+- **When set** (comma-separated CIDRs, e.g. `10.0.0.0/8,172.16.0.0/12`): XFF is walked right-to-left,
+  hops inside a trusted CIDR are skipped, the first untrusted hop is the client. **Operator contract:**
+  every listed proxy MUST overwrite/strip incoming XFF from the untrusted client
+  (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`), or the header cannot be trusted.
+- Never ship `172.18.0.0/16` (the docker bridge) as a production trust value — it does **not** sanitize
+  headers. It is only used as a simulated trusted proxy in the M31 dev-verification live run.
+- `docker compose` `app` service passes `.env` via `env_file`, so `TRUSTED_PROXY_CIDRS` set in `.env`
+  flows into the container without a compose change.
+
 ## Pre-commit guardrail
 
 This project has a history of unintended file bundling in fix commits (commits `2715feb` and `39e94a0` both swept up unrelated files via `git add -A`). **Before every commit**, run:
