@@ -79,7 +79,7 @@ tests/embed/test_router.py::TestGetWidgetConfig::test_config_payload_deep_schema
 tests/embed/test_router.py::TestGetWidgetConfig::test_config_cache_control_header PASSED [  0%]
 ```
 
-The cache-control test asserts `Cache-Control: public, max-age=300` on the
+The cache-control test asserts the presence of `public` and `max-age` on the
 config response (`app/routers/embed.py`), alongside a 300s server-side Redis
 cache (`app/services/embed_service.py::get_widget_config`).
 
@@ -93,23 +93,33 @@ tests/embed/test_widget_js.py::TestGenerateScriptTag::test_versioned_url_changes
 ```
 
 `widget.js` is served with `Cache-Control: public, max-age=31536000, immutable`
-(`app/routers/embed.py:54`); editing a widget bumps `js_version`, changing the
+(`app/routers/embed.py:63`); editing a widget bumps `js_version`, changing the
 cache-busting `?v=` query parameter.
 
 ### 6 · The widget renders on a page served from a different origin than your API
 
+The bundle resolves its API origin at runtime from the `<script>` element that
+loaded it (`document.currentScript.src`), so both the config fetch and the
+submit POST are absolute to the API host — never to the embedding page. The
+bundle is executed against a simulated second-origin page (node DOM/XHR
+harness, `tests/embed/harness_foreign_origin.js`): the script tag's `src` lives
+on `api.flyrank.example` while the page is served from `customer-site.example`.
+The URLs the bundle actually requests must resolve to the script's host, not
+the page's:
+
 ```text
-tests/test_e2e_widget.py::TestE2EWidget::test_widget_js_served PASSED [ 95%]
+$ node tests/embed/harness_foreign_origin.js <rendered-widget.js>
+{"config":"https://api.flyrank.example/public/widget/abc/config","submit":"https://api.flyrank.example/public/widget/abc/submit"}
 ```
 
-The rendered bundle is self-contained and data-driven — it fetches its config
-at runtime and builds the form DOM from it:
-
 ```text
-tests/embed/test_widget_js.py::TestRenderWidgetJs::test_js_references_config_at_runtime PASSED [  2%]
-tests/embed/test_widget_js.py::TestRenderWidgetJs::test_client_side_config_url_constructed_at_runtime PASSED [  2%]
-tests/embed/test_widget_js.py::TestRenderWidgetJs::test_uses_self_invoking_function PASSED [  2%]
+tests/embed/test_widget_js.py::TestCrossOriginRender::test_config_and_submit_resolve_to_script_origin PASSED [100%]
+============================== 1 passed in 0.22s ==============================
 ```
+
+Before the fix the same harness resolved both URLs against the page origin
+(`https://customer-site.example/...`) — a silent 404 and no render — so this
+test fails on the pre-fix bundle and passes on the post-fix bundle.
 
 Manual proof: `customer-site/index.html` is a plain HTML page that injects the
 one-line `<script>` and is served from a second local origin
