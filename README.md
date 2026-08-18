@@ -1,5 +1,13 @@
 # FlyRank Backend AI
 
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![pytest](https://img.shields.io/badge/tests-886%20passing-0A9EDC?style=flat&logo=pytest&logoColor=white)](https://pytest.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A production-ready FastAPI backend that combines task management, web scraping, Supabase authentication, asynchronous AI inference (RQ + Groq), automated PDF report generation, and an embeddable widget platform with spam-protected lead capture.
 
 ## Features
@@ -321,8 +329,8 @@ curl -o report.pdf http://localhost:8000/reports/files/report_<job_id>.pdf
 
 ```bash
 # 1. Clone the repository
-git clone <repo-url>
-cd <repo-dir>
+git clone https://github.com/ahmedm0ssad/flyrank-backend.git
+cd flyrank-backend
 
 # 2. Install dependencies (Python 3.10+)
 python -m venv .venv
